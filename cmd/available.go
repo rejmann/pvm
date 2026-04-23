@@ -11,7 +11,7 @@ import (
 	phpfs "github.com/rejmann/pvm/internal/fs"
 )
 
-var availableCmd = &cobra.Command{
+var AvailableCmd = &cobra.Command{
 	Use:   "available",
 	Short: "List all PHP versions available to install from php.net",
 	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 10 minutes. Use --refresh to force a fresh fetch.",
@@ -20,7 +20,7 @@ var availableCmd = &cobra.Command{
 }
 
 func init() {
-	availableCmd.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
+	AvailableCmd.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
 }
 
 func run(cmd *cobra.Command, args []string) error {
