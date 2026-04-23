@@ -39,7 +39,7 @@ func print(ctx context.Context, m *phpfs.Manager, out io.Writer) error {
 	}
 
 	fmt.Fprintln(out, "Install with: pvm install <branch>  (e.g. pvm install 8.4)")
-	fmt.Fprintln(out, "              pvm install lts        (installs newest supported branch)")
+	fmt.Fprintln(out, "              pvm install lts       (installs newest supported branch)")
 	fmt.Fprintf(out, "\n%d branches listed.\n", len(branches))
 
 	fmt.Fprintf(out, "\n  %-8s  %-12s  %-13s\n", "BRANCH", "LATEST", "STATUS")

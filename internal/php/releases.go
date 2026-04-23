@@ -14,10 +14,10 @@ type Supported struct {
 	Version           string   `json:"version"`
 }
 
-type BranchResponse = map[string]Supported
+type SupportedResponse = map[string]Supported
 
 func FetchAllBranches(ctx context.Context) ([]Branch, error) {
-	supported, err := httpRequest[BranchResponse](ctx, urlBase, HttpMethod.Get, nil)
+	supported, err := httpRequest[SupportedResponse](ctx, urlBase, HttpMethod.Get, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +28,10 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 	}
 
 	var majors []string
-	for name := range supported {
-		majors = append(majors, name)
+	for name, info := range supported {
+		if !info.Museum {
+			majors = append(majors, name)
+		}
 	}
 
 	ch := make(chan result, len(majors))
@@ -42,15 +44,10 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 	}
 
 	var all []Branch
-	var firstErr error
 	for range majors {
 		r := <-ch
-		if r.err != nil && firstErr == nil {
-			firstErr = r.err
-		}
-
-		if firstErr != nil {
-			return nil, firstErr
+		if r.err != nil {
+			return nil, r.err
 		}
 
 		all = append(all, r.branches...)
@@ -63,35 +60,73 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 	return all, nil
 }
 
+type Major struct {
+	Date   string `json:"date"`
+	Museum bool   `json:"museum,omitempty"`
+}
+
+type MajorResponse = map[string]Major
+
 func fetchMajorBranches(
 	ctx context.Context,
 	major string,
-	supported BranchResponse,
+	supported SupportedResponse,
 ) ([]Branch, error) {
-	url := urlBase + "&major=" + major
-	supported, err := httpRequest[BranchResponse](ctx, url, HttpMethod.Get, nil)
+	url := urlBase + "&max=500&version=" + major
+	all, err := httpRequest[MajorResponse](ctx, url, HttpMethod.Get, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var branches []Branch
-	for name, info := range supported {
-		if info.Museum {
-			continue
-		}
+	best := latestPatchPerBranch(all)
 
+	activeBranches := map[string]bool{}
+	for _, b := range supported[major].SupportedVersions {
+		activeBranches[b] = true
+	}
+
+	var branches []Branch
+	for branch, latest := range best {
 		status := StatusEOL
-		if len(info.SupportedVersions) > 0 {
+		if activeBranches[branch] {
 			status = StatusSupported
 		}
 
 		branches = append(branches, Branch{
-			Name:              name,
-			Latest:            info.Version,
-			Status:            status,
-			SupportedVersions: info.SupportedVersions,
+			Name:   branch,
+			Latest: latest,
+			Status: status,
 		})
 	}
 
 	return branches, nil
+}
+
+func latestPatchPerBranch(all MajorResponse) map[string]string {
+	type patchEntry struct {
+		patch string
+		key   [3]int
+	}
+	best := map[string]patchEntry{}
+
+	for patchStr := range all {
+		parts := splitVersion(patchStr)
+		if len(parts) < 3 {
+			continue
+		}
+
+		branch := parts[0] + "." + parts[1]
+		k := versionKey(parts)
+		cur, ok := best[branch]
+		if !ok || k[2] > cur.key[2] {
+			best[branch] = patchEntry{patch: patchStr, key: k}
+		}
+	}
+
+	result := make(map[string]string, len(best))
+	for branch, entry := range best {
+		result[branch] = entry.patch
+	}
+
+	return result
 }
