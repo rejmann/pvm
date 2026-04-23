@@ -19,6 +19,7 @@ var rootCmd = &cobra.Command{
 func main() {
 	cmds := []*cobra.Command{
 		cmd.AvailableCmd,
+		cmd.InstallCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 

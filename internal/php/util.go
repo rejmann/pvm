@@ -33,3 +33,12 @@ func versionKey(parts []string) [3]int {
 	}
 	return k
 }
+
+func branchKey(branch string) int {
+	parts := splitVersion(branch)
+	if len(parts) < 2 {
+		return 0
+	}
+	k := versionKey(parts)
+	return k[0]*1000 + k[1]
+}

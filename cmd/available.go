@@ -16,18 +16,18 @@ var AvailableCmd = &cobra.Command{
 	Short: "List all PHP versions available to install from php.net",
 	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 10 minutes. Use --refresh to force a fresh fetch.",
 	Args:  cobra.NoArgs,
-	RunE:  run,
+	RunE:  runAvailable,
 }
 
-func init() {
+func initAvailable() {
 	AvailableCmd.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	return print(cmd.Context(), phpfs.NewManager(baseDir()), cmd.OutOrStdout())
+func runAvailable(cmd *cobra.Command, args []string) error {
+	return printAvailable(cmd.Context(), phpfs.NewManager(baseDir()), cmd.OutOrStdout())
 }
 
-func print(ctx context.Context, m *phpfs.Manager, out io.Writer) error {
+func printAvailable(ctx context.Context, m *phpfs.Manager, out io.Writer) error {
 	var (
 		branches []php.Branch
 		err      error

@@ -3,6 +3,7 @@ package php
 import (
 	"context"
 	"fmt"
+	"sort"
 )
 
 const urlBase = "https://www.php.net/releases/index.php?json"
@@ -129,4 +130,34 @@ func latestPatchPerBranch(all MajorResponse) map[string]string {
 	}
 
 	return result
+}
+
+func fetchReleases(ctx context.Context) ([]Release, error) {
+	all, err := FetchAllBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var supported []Release
+	for _, b := range all {
+		if b.Status == StatusSupported {
+			supported = append(supported, b)
+		}
+	}
+	if len(supported) == 0 {
+		return nil, fmt.Errorf("no supported PHP releases found")
+	}
+
+	sort.Slice(supported, func(i, j int) bool {
+		return branchKey(supported[i].Name) < branchKey(supported[j].Name)
+	})
+	return supported, nil
+}
+
+func LatestLTS(ctx context.Context) (string, error) {
+	releases, err := fetchReleases(ctx)
+	if err != nil {
+		return "", err
+	}
+	return releases[len(releases)-1].Name, nil
 }

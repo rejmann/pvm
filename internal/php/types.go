@@ -23,3 +23,5 @@ type Branch struct {
 	SupportedVersions []string
 	IsMuseum          bool
 }
+
+type Release = Branch
