@@ -21,7 +21,7 @@ func (m *Manager) VersionDir(v string) string {
 	return filepath.Join(m.versionsDir(), v)
 }
 
-func (m *Manager) EnsureBaseDir() error {
+func (m *Manager) EnsurebaseDir() error {
 	return os.MkdirAll(m.versionsDir(), 0755)
 }
 

@@ -9,7 +9,7 @@ pvm/
 │   ├── available.go         # `pvm available` command
 │   ├── install.go           # `pvm install` command
 │   ├── list.go              # `pvm list` command
-│   ├── use.go               # `pvm use` command + printPathHint()
+│   ├── use.go               # `pvm use` command
 │   ├── remove.go            # `pvm remove` command
 │   ├── lts_resolver.go      # Bridges cobra context → php.LatestLTS
 │   └── env.go               # baseDir() — resolves ~/.pvm or $PVM_HOME
@@ -28,7 +28,7 @@ pvm/
     │   └── apt.go           # APT installer (ondrej/php PPA)
     ├── symlink/
     │   ├── get.go           # GetCurrent() — reads ~/.pvm/current-version
-    │   └── set.go           # SetCurrent() / RemoveCurrent() — atomic symlink swap
+    │   └── set.go           # SetCurrent() / RemoveCurrent() — update-alternatives
     └── version/
         ├── version.go       # Version struct, Parse(), and Compare()
         └── lts.go           # Resolver interface and Resolve() for aliases
@@ -38,15 +38,16 @@ pvm/
 
 ```
 ~/.pvm/                        (or $PVM_HOME)
-├── current-version            # plain text: "8.4" — written by pvm use (planned)
-├── bin/
-│   └── php                   # symlink → /usr/bin/php8.4 — add this dir to $PATH
+├── current-version            # plain text: "8.4" — written by pvm use
 └── versions/
     ├── 8.3.20/
     │   └── binary             # plain text: /usr/bin/php8.3
     └── 8.4.6/
         └── binary             # plain text: /usr/bin/php8.4
 ```
+
+Active version switching is handled by `update-alternatives` at the system level
+(`/etc/alternatives/php` → `/usr/bin/phpX.Y`), so no PATH configuration is needed.
 
 ## Data flow — `pvm available`
 
@@ -67,27 +68,11 @@ cmd.runInstall
   └─ version.Resolve(arg, phpLTSResolver)
        └─ if alias "lts" → php.LatestLTS(ctx) → fetchReleases() → highest supported branch
   └─ version.Parse(concrete)       — validates format
-  └─ fs.Manager.EnsureBaseDir()    — mkdir ~/.pvm/versions
+  └─ fs.Manager.EnsurebaseDir()    — mkdir ~/.pvm/versions
   └─ fs.Manager.VersionInstalled() — checks binary file + stat
-  └─ installer.Apt(base, ver)
+  └─ installer.AptInstall(base, ver)
        └─ sudo apt-get install phpX.Y-cli
        └─ write ~/.pvm/versions/<ver>/binary = /usr/bin/phpX.Y
-  └─ printPathHint()               — guides user to add ~/.pvm/bin to PATH
-```
-
-## Data flow — `pvm remove`
-
-```
-cmd.runRemove
-  └─ version.Parse(arg)                — validates format (no alias support)
-  └─ fs.Manager.VersionInstalled()     — errors if not installed
-  └─ symlink.GetCurrent()              — checks if this version is the active one
-  └─ fs.Manager.RemoveVersionDir()
-       └─ os.RemoveAll(~/.pvm/versions/<ver>/)
-  └─ if was active → symlink.RemoveCurrent()
-       └─ removes bin/php symlink and current-version file
-       └─ prints warning to stderr: "No version is now active."
-  └─ prints "PHP <ver> removed." to stdout
 ```
 
 ## Data flow — `pvm use`
@@ -100,11 +85,26 @@ cmd.runUse
   └─ fs.Manager.VersionInstalled()     — errors with "run: pvm install X" if missing
   └─ fs.Manager.GetVersionBinary()     — reads ~/.pvm/versions/<ver>/binary
   └─ symlink.SetCurrent(base, ver, binPath)
-       └─ mkdir ~/.pvm/bin
-       └─ os.Symlink(binPath, bin/php.tmp)
-       └─ os.Rename(bin/php.tmp → bin/php)   ← atomic on Linux
+       └─ sudo update-alternatives --set php /usr/bin/phpX.Y
+            └─ updates /etc/alternatives/php → /usr/bin/phpX.Y
+            └─ /usr/bin/php now resolves to the chosen version
        └─ os.WriteFile(current-version)
-  └─ printPathHint()                   — warns if ~/.pvm/bin is not first in $PATH
+```
+
+## Data flow — `pvm remove`
+
+```
+cmd.runRemove
+  └─ version.Parse(arg)                — validates format (no alias support)
+  └─ fs.Manager.VersionInstalled()     — errors if not installed
+  └─ symlink.GetCurrent()              — checks if this version is the active one
+  └─ fs.Manager.RemoveVersionDir()
+       └─ os.RemoveAll(~/.pvm/versions/<ver>/)
+  └─ if was active → symlink.RemoveCurrent()
+       └─ sudo update-alternatives --auto php  ← system picks next available
+       └─ removes current-version file
+       └─ prints warning to stderr: "No version is now active."
+  └─ prints "PHP <ver> removed." to stdout
 ```
 
 ## Data flow — `pvm list`
@@ -132,6 +132,6 @@ cmd.runList
 - **`version.Resolver` interface** — decouples alias resolution from the php.net API, enabling unit-testing without network calls.
 - **`binary` file** — stores only the resolved binary path. This keeps version detection O(1) (a single file read + stat) and lets the installer be the sole authority on where the binary lives.
 - **Concurrent branch fetching** — `FetchAllBranches` launches one goroutine per active major version and fans in the results, reducing latency when php.net is slow.
-- **`current-version` file** — a plain-text file holding the active version name; `symlink.GetCurrent` reads it, `symlink.SetCurrent` writes it atomically alongside the `bin/php` symlink swap.
-- **Atomic symlink swap** — `SetCurrent` writes to `bin/php.tmp` then `os.Rename`s it over `bin/php`, which is atomic on Linux and avoids a window where `php` is absent.
+- **`update-alternatives` for version switching** — `pvm use` delegates to Debian/Ubuntu's `update-alternatives` system rather than managing PATH or symlinks in user directories. This is shell-agnostic: `/usr/bin/php` resolves to the selected version for all processes, regardless of shell or environment.
+- **`current-version` file** — a plain-text file at `~/.pvm/current-version` tracking the pvm-active version; read by `pvm list` and written by `pvm use`. It does not drive the actual binary resolution (that's `update-alternatives`), but provides fast local state for display.
 - **System PHP detection in `pvm list`** — `DetectSystem` runs each candidate binary with `php -r "…"` rather than parsing binary names, so it works regardless of naming conventions (e.g. Homebrew's `opt/php@8.3/bin/php`). Versions already managed by pvm are filtered out of the system group to avoid duplicates.

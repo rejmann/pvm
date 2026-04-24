@@ -47,7 +47,7 @@ func installVersion(
 		return fmt.Errorf("invalid version %q: %w", concrete, err)
 	}
 
-	if err := m.EnsureBaseDir(); err != nil {
+	if err := m.EnsurebaseDir(); err != nil {
 		return fmt.Errorf("initialize \"pvm\" directory: %w", err)
 	}
 
@@ -70,7 +70,6 @@ func installVersion(
 	}
 
 	fmt.Fprintf(out, "PHP %s installed successfully.\n", label)
-	printPathHint(m.Base, out)
 
 	return nil
 }
