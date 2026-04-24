@@ -8,9 +8,7 @@ import (
 	"strings"
 )
 
-// Apt installs a PHP version using the system apt package manager (requires sudo).
-// The ondrej/php PPA must be configured for non-distro PHP versions.
-func Apt(base, ver string) error {
+func AptInstall(base, ver string) error {
 	branch := majorMinor(ver)
 	pkg := "php" + branch + "-cli"
 
@@ -32,6 +30,19 @@ func Apt(base, ver string) error {
 	}
 
 	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+}
+
+func AptRemove(base, ver string) error {
+	branch := majorMinor(ver)
+	pkg := "php" + branch + "-cli"
+
+	cmd := exec.Command("sudo", "apt-get", "remove", "-y", pkg)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("apt-get remove %s: %w", pkg, err)
+	}
+	return nil
 }
 
 func majorMinor(ver string) string {

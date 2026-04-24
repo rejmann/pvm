@@ -24,3 +24,7 @@ func (m *Manager) VersionDir(v string) string {
 func (m *Manager) EnsureBaseDir() error {
 	return os.MkdirAll(m.versionsDir(), 0755)
 }
+
+func (m *Manager) RemoveVersionDir(v string) error {
+	return os.RemoveAll(m.VersionDir(v))
+}

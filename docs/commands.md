@@ -38,6 +38,38 @@ Hits `https://www.php.net/releases/index.php?json` to get the list of active maj
 
 ---
 
+## `pvm remove <version>`
+
+Removes an installed PHP version managed by pvm.
+
+```
+pvm remove <version>
+
+Arguments:
+  version   Exact version string as installed (e.g. 8.3.20)
+```
+
+### Examples
+
+```sh
+pvm remove 8.3.20
+```
+
+### What it does
+
+1. Validates the version string format.
+2. Fails if the version is not installed.
+3. Deletes `~/.pvm/versions/<ver>/` and all its contents.
+4. If the removed version was the active one, removes `~/.pvm/bin/php` and `~/.pvm/current-version`, and prints a warning to stderr:
+   ```
+   Warning: PHP 8.3.20 was the active version. No version is now active.
+   ```
+5. Prints `PHP 8.3.20 removed.` to stdout.
+
+> After removing the active version, run `pvm use <other-version>` to activate another one.
+
+---
+
 ## `pvm use <version|lts>`
 
 Switches the active PHP version by updating the `~/.pvm/bin/php` symlink.

@@ -10,6 +10,7 @@ pvm/
 │   ├── install.go           # `pvm install` command
 │   ├── list.go              # `pvm list` command
 │   ├── use.go               # `pvm use` command + printPathHint()
+│   ├── remove.go            # `pvm remove` command
 │   ├── lts_resolver.go      # Bridges cobra context → php.LatestLTS
 │   └── env.go               # baseDir() — resolves ~/.pvm or $PVM_HOME
 └── internal/
@@ -20,7 +21,7 @@ pvm/
     │   ├── util.go          # Version string parsing helpers
     │   └── http_request.go  # Generic HTTP client with JSON decoding
     ├── fs/
-    │   ├── manager.go       # Manager — wraps ~/.pvm directory structure
+    │   ├── manager.go       # Manager — wraps ~/.pvm directory structure; RemoveVersionDir
     │   ├── binary.go        # Read/write binary path; VersionInstalled check
     │   └── versions.go      # InstalledVersions() — sorted list from versions dir
     ├── installer/
@@ -72,6 +73,21 @@ cmd.runInstall
        └─ sudo apt-get install phpX.Y-cli
        └─ write ~/.pvm/versions/<ver>/binary = /usr/bin/phpX.Y
   └─ printPathHint()               — guides user to add ~/.pvm/bin to PATH
+```
+
+## Data flow — `pvm remove`
+
+```
+cmd.runRemove
+  └─ version.Parse(arg)                — validates format (no alias support)
+  └─ fs.Manager.VersionInstalled()     — errors if not installed
+  └─ symlink.GetCurrent()              — checks if this version is the active one
+  └─ fs.Manager.RemoveVersionDir()
+       └─ os.RemoveAll(~/.pvm/versions/<ver>/)
+  └─ if was active → symlink.RemoveCurrent()
+       └─ removes bin/php symlink and current-version file
+       └─ prints warning to stderr: "No version is now active."
+  └─ prints "PHP <ver> removed." to stdout
 ```
 
 ## Data flow — `pvm use`
