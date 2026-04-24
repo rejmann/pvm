@@ -24,8 +24,8 @@ pvm use lts
 # Remove an installed version
 pvm remove 8.3
 
-# Activate pvm's php in your shell (once, permanently)
-export PATH="$HOME/.pvm/bin:$PATH"
+# Show current active version
+pvm use lts
 ```
 
 ## Requirements

@@ -100,7 +100,6 @@ pvm use lts       # activates e.g. 8.4
 4. Reads the binary path from `~/.pvm/versions/<ver>/binary`.
 5. Atomically replaces `~/.pvm/bin/php` with a symlink to that binary.
 6. Writes the active version to `~/.pvm/current-version`.
-7. Prints a PATH hint if `~/.pvm/bin` is not first in `$PATH`.
 
 ### Typical workflow
 
@@ -110,16 +109,6 @@ pvm install 8.4
 pvm use 8.4       # → Now using PHP 8.4.6.
 pvm use 8.3       # → Now using PHP 8.3.20.
 ```
-
-### PATH setup
-
-`pvm use` changes the symlink but `php` in your terminal only picks it up if `~/.pvm/bin` comes first in `$PATH`:
-
-```sh
-export PATH="$HOME/.pvm/bin:$PATH"
-```
-
-Add this line to `~/.zshrc` or `~/.bashrc` to make it permanent.
 
 ---
 
@@ -198,16 +187,5 @@ The [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) must be 
 sudo add-apt-repository ppa:ondrej/php
 sudo apt-get update
 ```
-
-### PATH setup
-
-After installing, add `~/.pvm/bin` to your shell profile to make `php` point to the pvm-managed version:
-
-```sh
-# ~/.zshrc or ~/.bashrc
-export PATH="$HOME/.pvm/bin:$PATH"
-```
-
-Then restart your shell or run `source ~/.zshrc`.
 
 > `PVM_HOME` environment variable overrides the default `~/.pvm` directory.
