@@ -38,6 +38,18 @@ func setCurrentLinux(base, version, binaryPath string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("update-alternatives --set php %s: %w", binaryPath, err)
 	}
+
+	if err := updateSymlink(filepath.Join(base, "bin", "php"), binaryPath); err != nil {
+		return fmt.Errorf("update pvm bin symlink: %w", err)
+	}
+
+	localBin := filepath.Join(filepath.Dir(base), ".local", "bin", "php")
+	if fi, err := os.Lstat(localBin); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if err := updateSymlink(localBin, binaryPath); err != nil {
+			return fmt.Errorf("update ~/.local/bin/php symlink: %w", err)
+		}
+	}
+
 	return writeCurrentVersion(base, version)
 }
 
@@ -49,6 +61,18 @@ func removeCurrentLinux(base string) error {
 		return fmt.Errorf("update-alternatives --auto php: %w", err)
 	}
 	return removeCurrentVersion(base)
+}
+
+func updateSymlink(link, target string) error {
+	if err := os.MkdirAll(filepath.Dir(link), 0755); err != nil {
+		return err
+	}
+	tmp := link + ".tmp"
+	os.Remove(tmp)
+	if err := os.Symlink(target, tmp); err != nil {
+		return err
+	}
+	return os.Rename(tmp, link)
 }
 
 func setCurrentShim(base, version, binaryPath string) error {
