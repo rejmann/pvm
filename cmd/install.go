@@ -24,7 +24,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		args[0],
 		phpfs.NewManager(baseDir()),
 		phpLTSResolver{ctx: cmd.Context()},
-		installer.AptInstall,
+		installer.Install,
 		cmd.OutOrStdout(),
 		cmd.ErrOrStderr(),
 	)

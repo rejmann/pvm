@@ -3,10 +3,15 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	phpfs "github.com/rejmann/pvm/internal/fs"
 	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/rejmann/pvm/internal/version"
+	"github.com/rejmann/pvm/system"
 	"github.com/spf13/cobra"
 )
 
@@ -63,5 +68,28 @@ func useVersion(
 		label = fmt.Sprintf("%s (lts)", concrete)
 	}
 	fmt.Fprintf(out, "Now using PHP %s.\n", label)
+	printPathHint(out, m.Base)
 	return nil
+}
+
+func printPathHint(out io.Writer, base string) {
+	if runtime.GOOS == system.Linux {
+		return
+	}
+
+	shimDir := filepath.Join(base, "shims")
+	pathEnv := os.Getenv("PATH")
+	for _, p := range filepath.SplitList(pathEnv) {
+		if strings.EqualFold(p, shimDir) {
+			return
+		}
+	}
+
+	fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", shimDir)
+	switch runtime.GOOS {
+	case system.Windows:
+		fmt.Fprintf(out, "  setx PATH \"%s;%%PATH%%\"\n", shimDir)
+	default:
+		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", shimDir)
+	}
 }
