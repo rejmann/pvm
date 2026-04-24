@@ -21,6 +21,7 @@ func main() {
 		cmd.AvailableCmd,
 		cmd.InstallCmd,
 		cmd.ListCmd,
+		cmd.UseCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 

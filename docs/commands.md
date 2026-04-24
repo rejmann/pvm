@@ -38,6 +38,59 @@ Hits `https://www.php.net/releases/index.php?json` to get the list of active maj
 
 ---
 
+## `pvm use <version|lts>`
+
+Switches the active PHP version by updating the `~/.pvm/bin/php` symlink.
+
+```
+pvm use <version|lts>
+
+Arguments:
+  version   Full version (e.g. 8.3.20) or branch (e.g. 8.3) as recorded by pvm install
+  lts       Alias — resolves to the highest currently-supported branch
+```
+
+### Examples
+
+```sh
+pvm use 8.3       # activates 8.3.x (whichever patch was installed)
+pvm use lts       # activates e.g. 8.4
+```
+
+### What it does
+
+1. Resolves `lts` to the highest supported branch name if needed.
+2. Validates the version string format.
+3. Fails with a helpful error if the version is not yet installed:
+   ```
+   8.3 not installed — run: pvm install 8.3
+   ```
+4. Reads the binary path from `~/.pvm/versions/<ver>/binary`.
+5. Atomically replaces `~/.pvm/bin/php` with a symlink to that binary.
+6. Writes the active version to `~/.pvm/current-version`.
+7. Prints a PATH hint if `~/.pvm/bin` is not first in `$PATH`.
+
+### Typical workflow
+
+```sh
+pvm install 8.3
+pvm install 8.4
+pvm use 8.4       # → Now using PHP 8.4.6.
+pvm use 8.3       # → Now using PHP 8.3.20.
+```
+
+### PATH setup
+
+`pvm use` changes the symlink but `php` in your terminal only picks it up if `~/.pvm/bin` comes first in `$PATH`:
+
+```sh
+export PATH="$HOME/.pvm/bin:$PATH"
+```
+
+Add this line to `~/.zshrc` or `~/.bashrc` to make it permanent.
+
+---
+
 ## `pvm list`
 
 Lists all PHP versions found on the machine, split into two groups.

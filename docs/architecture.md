@@ -9,9 +9,9 @@ pvm/
 │   ├── available.go         # `pvm available` command
 │   ├── install.go           # `pvm install` command
 │   ├── list.go              # `pvm list` command
+│   ├── use.go               # `pvm use` command + printPathHint()
 │   ├── lts_resolver.go      # Bridges cobra context → php.LatestLTS
-│   ├── env.go               # baseDir() — resolves ~/.pvm or $PVM_HOME
-│   └── use.go               # printPathHint() — PATH guidance after install
+│   └── env.go               # baseDir() — resolves ~/.pvm or $PVM_HOME
 └── internal/
     ├── php/
     │   ├── types.go         # Branch, Release, Status types
@@ -72,6 +72,23 @@ cmd.runInstall
        └─ sudo apt-get install phpX.Y-cli
        └─ write ~/.pvm/versions/<ver>/binary = /usr/bin/phpX.Y
   └─ printPathHint()               — guides user to add ~/.pvm/bin to PATH
+```
+
+## Data flow — `pvm use`
+
+```
+cmd.runUse
+  └─ version.Resolve(arg, phpLTSResolver)
+       └─ if alias "lts" → php.LatestLTS(ctx)
+  └─ version.Parse(concrete)           — validates format
+  └─ fs.Manager.VersionInstalled()     — errors with "run: pvm install X" if missing
+  └─ fs.Manager.GetVersionBinary()     — reads ~/.pvm/versions/<ver>/binary
+  └─ symlink.SetCurrent(base, ver, binPath)
+       └─ mkdir ~/.pvm/bin
+       └─ os.Symlink(binPath, bin/php.tmp)
+       └─ os.Rename(bin/php.tmp → bin/php)   ← atomic on Linux
+       └─ os.WriteFile(current-version)
+  └─ printPathHint()                   — warns if ~/.pvm/bin is not first in $PATH
 ```
 
 ## Data flow — `pvm list`

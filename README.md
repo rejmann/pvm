@@ -17,7 +17,11 @@ pvm install 8.3
 # List installed versions (pvm-managed and system)
 pvm list
 
-# Activate pvm's php in your shell
+# Switch to an installed version
+pvm use 8.3
+pvm use lts
+
+# Activate pvm's php in your shell (once, permanently)
 export PATH="$HOME/.pvm/bin:$PATH"
 ```
 
