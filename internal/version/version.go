@@ -48,3 +48,19 @@ func Parse(s string) (Version, error) {
 	}
 	return v, nil
 }
+
+func (v Version) Compare(other Version) int {
+	for _, pair := range [][2]int{
+		{v.Major, other.Major},
+		{v.Minor, other.Minor},
+		{v.Patch, other.Patch},
+	} {
+		if pair[0] < pair[1] {
+			return -1
+		}
+		if pair[0] > pair[1] {
+			return 1
+		}
+	}
+	return 0
+}

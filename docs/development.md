@@ -70,12 +70,41 @@ type stubResolver struct{ v string }
 func (s stubResolver) ResolveLTS() (string, error) { return s.v, nil }
 ```
 
+## Managing the active version
+
+`internal/symlink` owns the `bin/php` symlink and `current-version` file:
+
+```go
+// Activate a version (call from a future `pvm use` command)
+err := symlink.SetCurrent(m.Base, "8.4.6", "/usr/bin/php8.4")
+
+// Deactivate (no active version)
+err := symlink.RemoveCurrent(m.Base)
+
+// Read the active version (used by `pvm list`)
+ver, err := symlink.GetCurrent(m.Base)
+```
+
+`SetCurrent` writes `bin/php.tmp` and renames it over `bin/php` atomically, so the symlink is never absent during the swap.
+
+## Detecting system PHP installs
+
+`php.DetectSystem()` returns all PHP binaries found outside pvm, sorted ascending. Use it when you need to show or operate on non-pvm PHP versions:
+
+```go
+installs := php.DetectSystem()
+for _, s := range installs {
+    fmt.Println(s.Version, s.Binary) // e.g. "8.1  /usr/bin/php8.1"
+}
+```
+
 ## Directory layout recap
 
 | Path | Purpose |
 |------|---------|
 | `~/.pvm/versions/<ver>/binary` | Path to the installed PHP binary for version `<ver>` |
-| `~/.pvm/bin/` | (planned) Symlinks — `php` → active version |
+| `~/.pvm/bin/php` | Symlink → active PHP binary; add `~/.pvm/bin` to `$PATH` |
+| `~/.pvm/current-version` | Plain-text file holding the active version name |
 | `$PVM_HOME` | Overrides `~/.pvm` when set |
 
 ## php.net API

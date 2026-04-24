@@ -20,6 +20,7 @@ func main() {
 	cmds := []*cobra.Command{
 		cmd.AvailableCmd,
 		cmd.InstallCmd,
+		cmd.ListCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 

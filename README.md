@@ -14,6 +14,9 @@ pvm install lts
 # Install a specific branch
 pvm install 8.3
 
+# List installed versions (pvm-managed and system)
+pvm list
+
 # Activate pvm's php in your shell
 export PATH="$HOME/.pvm/bin:$PATH"
 ```

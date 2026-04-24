@@ -38,6 +38,43 @@ Hits `https://www.php.net/releases/index.php?json` to get the list of active maj
 
 ---
 
+## `pvm list`
+
+Lists all PHP versions found on the machine, split into two groups.
+
+```
+pvm list
+```
+
+### Output
+
+```
+pvm managed:
+  8.3.20
+  8.4.6  (current)
+system:
+  8.1  (/usr/bin/php8.1)
+```
+
+**Groups:**
+- `pvm managed` — versions installed via `pvm install`, stored under `~/.pvm/versions/`. The version set as active via `pvm use` is marked `(current)`.
+- `system` — PHP binaries found on the host **outside** of pvm (e.g. distro package, Homebrew). Versions already tracked by pvm are excluded from this group to avoid duplicates.
+
+If no PHP versions are found at all:
+
+```
+No PHP versions found.
+Run 'pvm available' to see installable versions.
+```
+
+### How it works
+
+1. Reads `~/.pvm/versions/` to build the managed list (sorted ascending by version).
+2. Reads `~/.pvm/current-version` to mark the active version.
+3. Runs `DetectSystem()` which globs well-known binary locations (`/usr/bin/php[0-9]*`, `/usr/local/bin/php[0-9]*`, Homebrew paths) and also checks `php` in `$PATH`. For each candidate it executes `php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"` to confirm the version.
+
+---
+
 ## `pvm install <version|lts>`
 
 Installs a PHP version using the system `apt` package manager.
