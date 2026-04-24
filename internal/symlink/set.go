@@ -74,8 +74,6 @@ func removeCurrentShim(base string) error {
 	return removeCurrentVersion(base)
 }
 
-// setCurrentWindows writes a .bat shim in %PVM_HOME%\shims\php.bat.
-// Add %PVM_HOME%\shims to PATH to activate the selected version.
 func setCurrentWindows(base, version, binaryPath string) error {
 	shimDir := filepath.Join(base, "shims")
 	if err := os.MkdirAll(shimDir, 0755); err != nil {
