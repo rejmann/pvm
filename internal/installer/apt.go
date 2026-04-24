@@ -12,11 +12,14 @@ func AptInstall(base, ver string) error {
 	branch := majorMinor(ver)
 	pkg := "php" + branch + "-cli"
 
-	cmd := exec.Command("sudo", "apt-get", "install", "-y", pkg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("apt-get install %s: %w\n\nIf the package was not found, add the ondrej/php PPA first:\n  sudo add-apt-repository ppa:ondrej/php && sudo apt-get update", pkg, err)
+	if err := aptInstallPkg(pkg); err != nil {
+		fmt.Println("Package not found, adding ondrej/php PPA...")
+		if ppaErr := addOndrejPPA(); ppaErr != nil {
+			return fmt.Errorf("add ondrej/php PPA: %w", ppaErr)
+		}
+		if err2 := aptInstallPkg(pkg); err2 != nil {
+			return fmt.Errorf("install PHP %s: %w", ver, err2)
+		}
 	}
 
 	binPath := "/usr/bin/php" + branch
@@ -43,6 +46,26 @@ func AptRemove(base, ver string) error {
 		return fmt.Errorf("apt-get remove %s: %w", pkg, err)
 	}
 	return nil
+}
+
+func aptInstallPkg(pkg string) error {
+	cmd := exec.Command("sudo", "apt-get", "install", "-y", pkg)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func addOndrejPPA() error {
+	add := exec.Command("sudo", "add-apt-repository", "-y", "ppa:ondrej/php")
+	add.Stdout = os.Stdout
+	add.Stderr = os.Stderr
+	if err := add.Run(); err != nil {
+		return err
+	}
+	update := exec.Command("sudo", "apt-get", "update")
+	update.Stdout = os.Stdout
+	update.Stderr = os.Stderr
+	return update.Run()
 }
 
 func majorMinor(ver string) string {
