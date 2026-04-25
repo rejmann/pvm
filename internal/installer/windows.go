@@ -100,16 +100,12 @@ func windowsSaveBinary(base, ver, branch string) error {
 func findWindowsBinary(branch string) (string, error) {
 	compact := strings.ReplaceAll(branch, ".", "")
 	candidates := []string{
-		// winget (official PHP Windows installer)
 		filepath.Join("C:\\", "php", "php.exe"),
 		filepath.Join("C:\\", "php"+branch, "php.exe"),
+		filepath.Join("C:\\", "php"+compact, "php.exe"),
 		filepath.Join("C:\\", "Program Files", "PHP", "php-"+branch, "php.exe"),
 		filepath.Join("C:\\", "Program Files", "PHP", "v"+branch, "php.exe"),
-		// chocolatey
-		filepath.Join("C:\\", "tools", "php"+compact, "php.exe"),
-		filepath.Join("C:\\", "tools", "php", "php.exe"),
-		filepath.Join("C:\\", "ProgramData", "chocolatey", "lib", "php", "tools", "php.exe"),
-		filepath.Join("C:\\", "php"+compact, "php.exe"),
+		filepath.Join("C:\\", "Program Files", "PHP", "php.exe"),
 	}
 
 	for _, p := range candidates {
@@ -118,9 +114,33 @@ func findWindowsBinary(branch string) (string, error) {
 		}
 	}
 
+	// winget updates user PATH in the registry but the current process
+	// has the old PATH — ask PowerShell which reads the updated registry
+	if p := findViaPowerShell(); p != "" {
+		return p, nil
+	}
+
 	if p, err := exec.LookPath("php"); err == nil {
 		return p, nil
 	}
 
-	return "", fmt.Errorf("PHP binary not found after installation — check your PHP install location")
+	return "", fmt.Errorf("PHP binary not found — open a new terminal and run: pvm use <version>")
+}
+
+func findViaPowerShell() string {
+	out, err := exec.Command(
+		"powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`$env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine"); (Get-Command php -ErrorAction SilentlyContinue).Source`,
+	).Output()
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return ""
+	}
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
 }

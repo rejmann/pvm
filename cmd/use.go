@@ -73,23 +73,25 @@ func useVersion(
 }
 
 func printPathHint(out io.Writer, base string) {
-	if runtime.GOOS == system.Linux {
-		return
+	var managed string
+	switch runtime.GOOS {
+	case system.Linux:
+		managed = filepath.Join(base, "bin")
+	default:
+		managed = filepath.Join(base, "shims")
 	}
 
-	shimDir := filepath.Join(base, "shims")
-	pathEnv := os.Getenv("PATH")
-	for _, p := range filepath.SplitList(pathEnv) {
-		if strings.EqualFold(p, shimDir) {
+	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
+		if strings.EqualFold(p, managed) {
 			return
 		}
 	}
 
-	fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", shimDir)
+	fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", managed)
 	switch runtime.GOOS {
 	case system.Windows:
-		fmt.Fprintf(out, "  setx PATH \"%s;%%PATH%%\"\n", shimDir)
+		fmt.Fprintf(out, "  setx PATH \"%s;%%PATH%%\"\n", managed)
 	default:
-		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", shimDir)
+		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", managed)
 	}
 }
