@@ -89,10 +89,9 @@ func printPathHint(out io.Writer, base string) {
 
 	switch runtime.GOOS {
 	case system.Windows:
-		fmt.Fprintf(out, "\nOne-time setup — add the pvm shims dir to your PATH then reopen the terminal:\n")
-		fmt.Fprintf(out, "  $env:PATH = \"%s;$env:PATH\"\n", managed)
-		fmt.Fprintf(out, "  setx PATH \"%s;%%PATH%%\"\n", managed)
-		fmt.Fprintf(out, "\nAfter that, pvm use will switch versions instantly without any extra steps.\n")
+		fmt.Fprintf(out, "\nOne-time setup: reload your PowerShell profile to activate version switching:\n")
+		fmt.Fprintf(out, "  . $PROFILE\n")
+		fmt.Fprintf(out, "\nAfter that, pvm use will switch versions instantly in any new terminal.\n")
 	default:
 		fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", managed)
 		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", managed)

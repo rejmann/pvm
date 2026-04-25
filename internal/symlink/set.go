@@ -129,8 +129,54 @@ func setCurrentWindows(base, version, binaryPath string) error {
 	}
 
 	prependToUserPath(shimDir)
+	installPowerShellWrapper(base, shimDir)
 
 	return writeCurrentVersion(base, version)
+}
+
+// installPowerShellWrapper appends a pvm wrapper function to the user's
+// PowerShell profile so that `pvm use` updates $env:PATH in the current
+// session automatically. Best-effort — silently ignored on failure.
+func installPowerShellWrapper(base, shimDir string) {
+	profileOut, err := exec.Command(
+		"powershell", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE",
+	).Output()
+	if err != nil {
+		return
+	}
+	profilePath := strings.TrimSpace(string(profileOut))
+	if profilePath == "" {
+		return
+	}
+
+	existing, _ := os.ReadFile(profilePath)
+	if strings.Contains(string(existing), "# pvm-wrapper") {
+		return
+	}
+
+	wrapper := fmt.Sprintf(`
+# pvm-wrapper — managed by pvm, do not edit this block manually
+function Invoke-PVM {
+    $exe = "%s\pvm.exe"
+    if (-not (Test-Path $exe)) { $exe = (Get-Command pvm.exe -ErrorAction SilentlyContinue)?.Source }
+    if (-not $exe) { Write-Error "pvm.exe not found"; return }
+    & $exe @args
+    if ($LASTEXITCODE -eq 0 -and $args.Count -gt 0 -and $args[0] -eq 'use') {
+        $shimDir = "%s"
+        $env:PATH = $shimDir + ';' + (($env:PATH -split ';') | Where-Object { $_ -ne $shimDir -and $_ } | Join-String -Separator ';')
+    }
+}
+Set-Alias -Name pvm -Value Invoke-PVM -Force
+# end pvm-wrapper
+`, base, shimDir)
+
+	_ = os.MkdirAll(filepath.Dir(profilePath), 0755)
+	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(wrapper)
 }
 
 // prependToUserPath adds dir to the front of the current user PATH in the
