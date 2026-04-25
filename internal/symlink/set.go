@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/rejmann/pvm/system"
 )
@@ -99,6 +100,15 @@ func removeCurrentShim(base string) error {
 }
 
 func setCurrentWindows(base, version, binaryPath string) error {
+	// prefer the deterministic install dir over whatever is stored in the binary file
+	if p := windowsInstalledBinary(base, version); p != "" {
+		binaryPath = p
+	}
+
+	if binaryPath == "" {
+		return fmt.Errorf("PHP %s binary not found — run: pvm install %s", version, version)
+	}
+
 	shimDir := filepath.Join(base, "shims")
 	if err := os.MkdirAll(shimDir, 0755); err != nil {
 		return fmt.Errorf("create shims directory: %w", err)
@@ -111,6 +121,25 @@ func setCurrentWindows(base, version, binaryPath string) error {
 	}
 
 	return writeCurrentVersion(base, version)
+}
+
+// windowsInstalledBinary returns the php.exe path from the pvm-managed install
+// directory (base/php/<major>.<minor>/php.exe) if it exists.
+func windowsInstalledBinary(base, version string) string {
+	branch := versionBranch(version)
+	p := filepath.Join(base, "php", branch, "php.exe")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return ""
+}
+
+func versionBranch(version string) string {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
+	}
+	return version
 }
 
 func writeCurrentVersion(base, version string) error {

@@ -15,10 +15,42 @@ func WindowsInstall(base, ver string) error {
 		return fmt.Errorf("winget not found — install App Installer from the Microsoft Store")
 	}
 
-	if err := wingetInstall(ver, branch); err != nil {
+	pkgID, err := wingetFindPHP(branch)
+	if err != nil {
 		return err
 	}
-	return windowsSaveBinary(base, ver, branch)
+
+	// each branch gets its own isolated directory under pvm home
+	installDir := phpInstallDir(base, branch)
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		return fmt.Errorf("create install directory: %w", err)
+	}
+
+	cmd := exec.Command(
+		"winget", "install",
+		"--id", pkgID,
+		"--location", installDir,
+		"--silent",
+		"--accept-package-agreements",
+		"--accept-source-agreements",
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("winget install %s: %w", pkgID, err)
+	}
+
+	binPath := filepath.Join(installDir, "php.exe")
+	if _, err := os.Stat(binPath); err != nil {
+		return fmt.Errorf("PHP binary not found at %s after installation", binPath)
+	}
+
+	verDir := filepath.Join(base, "versions", ver)
+	if err := os.MkdirAll(verDir, 0755); err != nil {
+		return fmt.Errorf("create version directory: %w", err)
+	}
+
+	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
 }
 
 func WindowsRemove(base, ver string) error {
@@ -33,32 +65,17 @@ func WindowsRemove(base, ver string) error {
 		return fmt.Errorf("PHP %s not found in winget: %w", ver, err)
 	}
 
-	cmd := exec.Command("winget", "uninstall", "--id", pkgID, "--silent")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("winget uninstall %s: %w", pkgID, err)
-	}
-	return nil
-}
-
-func wingetInstall(ver, branch string) error {
-	pkgID, err := wingetFindPHP(branch)
-	if err != nil {
-		return err
-	}
-
+	installDir := phpInstallDir(base, branch)
 	cmd := exec.Command(
-		"winget", "install",
+		"winget", "uninstall",
 		"--id", pkgID,
+		"--location", installDir,
 		"--silent",
-		"--accept-package-agreements",
-		"--accept-source-agreements",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("winget install %s: %w", pkgID, err)
+		return fmt.Errorf("winget uninstall %s: %w", pkgID, err)
 	}
 	return nil
 }
@@ -71,76 +88,18 @@ func wingetFindPHP(branch string) (string, error) {
 
 	target := "PHP.PHP." + branch
 	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		for _, f := range fields {
+		for _, f := range strings.Fields(line) {
 			if strings.EqualFold(f, target) {
 				return target, nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("PHP %s not found in winget", branch)
+	return "", fmt.Errorf("PHP %s not found in winget — run: pvm available", branch)
 }
 
-
-func windowsSaveBinary(base, ver, branch string) error {
-	binPath, err := findWindowsBinary(branch)
-	if err != nil {
-		return err
-	}
-
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
-}
-
-func findWindowsBinary(branch string) (string, error) {
-	compact := strings.ReplaceAll(branch, ".", "")
-	candidates := []string{
-		filepath.Join("C:\\", "php", "php.exe"),
-		filepath.Join("C:\\", "php"+branch, "php.exe"),
-		filepath.Join("C:\\", "php"+compact, "php.exe"),
-		filepath.Join("C:\\", "Program Files", "PHP", "php-"+branch, "php.exe"),
-		filepath.Join("C:\\", "Program Files", "PHP", "v"+branch, "php.exe"),
-		filepath.Join("C:\\", "Program Files", "PHP", "php.exe"),
-	}
-
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
-		}
-	}
-
-	// winget updates user PATH in the registry but the current process
-	// has the old PATH — ask PowerShell which reads the updated registry
-	if p := findViaPowerShell(); p != "" {
-		return p, nil
-	}
-
-	if p, err := exec.LookPath("php"); err == nil {
-		return p, nil
-	}
-
-	return "", fmt.Errorf("PHP binary not found — open a new terminal and run: pvm use <version>")
-}
-
-func findViaPowerShell() string {
-	out, err := exec.Command(
-		"powershell", "-NoProfile", "-NonInteractive", "-Command",
-		`$env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine"); (Get-Command php -ErrorAction SilentlyContinue).Source`,
-	).Output()
-	if err != nil {
-		return ""
-	}
-	p := strings.TrimSpace(string(out))
-	if p == "" {
-		return ""
-	}
-	if _, err := os.Stat(p); err != nil {
-		return ""
-	}
-	return p
+// phpInstallDir returns the isolated directory for a PHP branch under pvm home.
+// e.g. %LOCALAPPDATA%\pvm\php\8.3
+func phpInstallDir(base, branch string) string {
+	return filepath.Join(base, "php", branch)
 }
