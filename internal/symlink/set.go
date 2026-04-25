@@ -120,7 +120,27 @@ func setCurrentWindows(base, version, binaryPath string) error {
 		return fmt.Errorf("write php shim: %w", err)
 	}
 
+	// ensure shims dir is first in the user PATH so it takes priority over
+	// any system-level PHP (e.g. winget-installed)
+	prependToUserPath(shimDir)
+
 	return writeCurrentVersion(base, version)
+}
+
+// prependToUserPath adds dir to the front of the current user PATH in the
+// Windows registry. It is a best-effort call — errors are silently ignored
+// because the shim already works if the user manually adds the directory.
+func prependToUserPath(dir string) {
+	script := fmt.Sprintf(`
+$dir = '%s'
+$current = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+$parts = $current -split ';' | Where-Object { $_ -ne $dir -and $_ -ne '' }
+$newPath = ($dir + ';' + ($parts -join ';')).TrimEnd(';')
+[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+`, dir)
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+	_ = cmd.Run()
 }
 
 // windowsInstalledBinary returns the php.exe path from the pvm-managed install
