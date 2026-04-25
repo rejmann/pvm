@@ -7,6 +7,16 @@ import (
 	"path/filepath"
 )
 
+const (
+	pmApt    = "apt-get"
+	pmDnf    = "dnf"
+	pmYum    = "yum"
+	pmPacman = "pacman"
+	pmZypper = "zypper"
+
+	phpBinDir = "/usr/bin/php"
+)
+
 type pkgManagerDef struct {
 	bin         string
 	phpPkg      func(branch string) string
@@ -18,18 +28,18 @@ type pkgManagerDef struct {
 
 var packageManagers = []pkgManagerDef{
 	{
-		bin:    "apt-get",
+		bin:    pmApt,
 		phpPkg: func(branch string) string { return "php" + branch + "-cli" },
-		phpBin: func(branch string) string { return "/usr/bin/php" + branch },
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
-			return []string{"apt-get", "install", "-y", pkg}
+			return []string{pmApt, "install", "-y", pkg}
 		},
 		removeArgs: func(pkg string) []string {
-			return []string{"apt-get", "remove", "-y", pkg}
+			return []string{pmApt, "remove", "-y", pkg}
 		},
 		preInstall: func(branch string) error {
 			pkg := "php" + branch + "-cli"
-			if isInstallable(pkg, "apt-get", "-s", "install", pkg) {
+			if isInstallable(pkg, pmApt, "-s", "install", pkg) {
 				return nil
 			}
 			fmt.Println("Package not found, adding ondrej/php PPA...")
@@ -38,76 +48,76 @@ var packageManagers = []pkgManagerDef{
 			if err := add.Run(); err != nil {
 				return fmt.Errorf("add-apt-repository: %w", err)
 			}
-			upd := exec.Command("sudo", "apt-get", "update")
+			upd := exec.Command("sudo", pmApt, "update")
 			upd.Stdout, upd.Stderr = os.Stdout, os.Stderr
 			return upd.Run()
 		},
 	},
 	{
-		bin:    "dnf",
+		bin:    pmDnf,
 		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
-		phpBin: func(branch string) string { return "/usr/bin/php" + branch },
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
-			return []string{"dnf", "install", "-y", pkg}
+			return []string{pmDnf, "install", "-y", pkg}
 		},
 		removeArgs: func(pkg string) []string {
-			return []string{"dnf", "remove", "-y", pkg}
+			return []string{pmDnf, "remove", "-y", pkg}
 		},
 		preInstall: func(branch string) error {
 			pkg := "php" + branch + "-php-cli"
-			if isInstallable(pkg, "dnf", "info", pkg) {
+			if isInstallable(pkg, pmDnf, "info", pkg) {
 				return nil
 			}
 			fmt.Println("Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", "dnf", "install", "-y",
+			remi := exec.Command("sudo", pmDnf, "install", "-y",
 				"https://rpms.remirepo.net/fedora/remi-release-$(rpm -E %fedora).rpm")
 			remi.Stdout, remi.Stderr = os.Stdout, os.Stderr
 			return remi.Run()
 		},
 	},
 	{
-		bin:    "yum",
+		bin:    pmYum,
 		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
-		phpBin: func(branch string) string { return "/usr/bin/php" + branch },
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
-			return []string{"yum", "install", "-y", pkg}
+			return []string{pmYum, "install", "-y", pkg}
 		},
 		removeArgs: func(pkg string) []string {
-			return []string{"yum", "remove", "-y", pkg}
+			return []string{pmYum, "remove", "-y", pkg}
 		},
 		preInstall: func(branch string) error {
 			pkg := "php" + branch + "-php-cli"
-			if isInstallable(pkg, "yum", "info", pkg) {
+			if isInstallable(pkg, pmYum, "info", pkg) {
 				return nil
 			}
 			fmt.Println("Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", "yum", "install", "-y",
+			remi := exec.Command("sudo", pmYum, "install", "-y",
 				"https://rpms.remirepo.net/enterprise/remi-release-$(rpm -E %rhel).rpm")
 			remi.Stdout, remi.Stderr = os.Stdout, os.Stderr
 			return remi.Run()
 		},
 	},
 	{
-		bin:    "pacman",
+		bin:    pmPacman,
 		phpPkg: func(branch string) string { return "php" },
-		phpBin: func(branch string) string { return "/usr/bin/php" },
+		phpBin: func(branch string) string { return phpBinDir },
 		installArgs: func(pkg string) []string {
-			return []string{"pacman", "-S", "--noconfirm", pkg}
+			return []string{pmPacman, "-S", "--noconfirm", pkg}
 		},
 		removeArgs: func(pkg string) []string {
-			return []string{"pacman", "-R", "--noconfirm", pkg}
+			return []string{pmPacman, "-R", "--noconfirm", pkg}
 		},
 		preInstall: nil,
 	},
 	{
-		bin:    "zypper",
+		bin:    pmZypper,
 		phpPkg: func(branch string) string { return "php" + branch },
-		phpBin: func(branch string) string { return "/usr/bin/php" + branch },
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
-			return []string{"zypper", "install", "-y", pkg}
+			return []string{pmZypper, "install", "-y", pkg}
 		},
 		removeArgs: func(pkg string) []string {
-			return []string{"zypper", "remove", "-y", pkg}
+			return []string{pmZypper, "remove", "-y", pkg}
 		},
 		preInstall: nil,
 	},
