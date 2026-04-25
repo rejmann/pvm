@@ -19,7 +19,7 @@ var AvailableCmd = &cobra.Command{
 	RunE:  runAvailable,
 }
 
-func initAvailable() {
+func init() {
 	AvailableCmd.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
 }
 

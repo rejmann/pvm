@@ -5,8 +5,13 @@
 Lists all PHP branches available to install from php.net.
 
 ```
-pvm available
+pvm available [--refresh]
+
+Flags:
+  -r, --refresh   Bypass cache and fetch fresh data from php.net
 ```
+
+Results are cached for **1 day** at `~/.pvm/cache/available.json` (Windows: `%LOCALAPPDATA%\pvm\cache\available.json`). Use `--refresh` to force a fresh fetch.
 
 ### Output
 
@@ -31,7 +36,7 @@ Install with: pvm install <branch>  (e.g. pvm install 8.4)
 
 ### How it works
 
-Hits `https://www.php.net/releases/index.php?json` to get the list of active majors, then launches one concurrent request per major to retrieve all patches. Retains only the highest patch per branch.
+On the first run (or with `--refresh`), hits `https://www.php.net/releases/index.php?json` to get the list of active majors, then launches one concurrent request per major to retrieve all patches. Retains only the highest patch per branch. The result is written to the local cache file and reused for 24 hours on subsequent calls.
 
 ---
 
