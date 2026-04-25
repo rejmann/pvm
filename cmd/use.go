@@ -3,10 +3,15 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	phpfs "github.com/rejmann/pvm/internal/fs"
 	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/rejmann/pvm/internal/version"
+	"github.com/rejmann/pvm/system"
 	"github.com/spf13/cobra"
 )
 
@@ -63,5 +68,32 @@ func useVersion(
 		label = fmt.Sprintf("%s (lts)", concrete)
 	}
 	fmt.Fprintf(out, "Now using PHP %s.\n", label)
+	printPathHint(out, m.Base)
 	return nil
+}
+
+func printPathHint(out io.Writer, base string) {
+	var managed string
+	switch runtime.GOOS {
+	case system.Linux:
+		managed = filepath.Join(base, "bin")
+	default:
+		managed = filepath.Join(base, "shims")
+	}
+
+	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
+		if strings.EqualFold(p, managed) {
+			return
+		}
+	}
+
+	switch runtime.GOOS {
+	case system.Windows:
+		fmt.Fprintf(out, "\nOne-time setup: reload your PowerShell profile to activate version switching:\n")
+		fmt.Fprintf(out, "  . $PROFILE\n")
+		fmt.Fprintf(out, "\nAfter that, pvm use will switch versions instantly in any new terminal.\n")
+	default:
+		fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", managed)
+		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", managed)
+	}
 }

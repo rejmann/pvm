@@ -1,6 +1,6 @@
 # pvm — PHP Version Manager
 
-`pvm` is a CLI tool for installing and managing multiple PHP versions on Linux systems that use `apt` (Debian/Ubuntu).
+`pvm` is a cross-platform CLI tool for installing and managing multiple PHP versions on Linux, macOS, and Windows.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ pvm install lts
 # Install a specific branch
 pvm install 8.3
 
-# List installed versions (pvm-managed and system)
+# List installed versions
 pvm list
 
 # Switch to an installed version
@@ -23,24 +23,44 @@ pvm use lts
 
 # Remove an installed version
 pvm remove 8.3
-
-# Activate pvm's php in your shell (once, permanently)
-export PATH="$HOME/.pvm/bin:$PATH"
 ```
 
 ## Requirements
 
-- Linux with `apt` and `sudo`
-- [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) for non-distro PHP versions:
+| OS | Requirement |
+|----|-------------|
+| Linux (Debian/Ubuntu) | `apt-get`, `sudo`. Extra PHP branches (e.g. 7.4) need the [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) — pvm adds it automatically. |
+| Linux (Fedora) | `dnf`, `sudo`. Extra branches need the [Remi repo](https://rpms.remirepo.net) — pvm adds it automatically. |
+| Linux (RHEL/CentOS) | `yum`, `sudo`. Extra branches need the [Remi repo](https://rpms.remirepo.net) — pvm adds it automatically. |
+| Linux (Arch) | `pacman`, `sudo`. Only the version available in the official repos can be installed. |
+| Linux (openSUSE) | `zypper`, `sudo`. |
+| macOS | [Homebrew](https://brew.sh) |
+| Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) |
 
-```sh
-sudo add-apt-repository ppa:ondrej/php && sudo apt-get update
-```
+pvm detects the package manager automatically on Linux — no configuration needed.
+
+## PATH setup
+
+After the first `pvm use`, add the pvm shim directory to your PATH once:
+
+| OS | Directory | Shell config |
+|----|-----------|--------------|
+| Linux | `~/.pvm/bin` | `export PATH="$HOME/.pvm/bin:$PATH"` in `~/.bashrc` / `~/.zshrc` |
+| macOS | `~/.pvm/shims` | `export PATH="$HOME/.pvm/shims:$PATH"` |
+| Windows | `%LOCALAPPDATA%\pvm\shims` | `setx PATH "%LOCALAPPDATA%\pvm\shims;%PATH%"` |
+
+> `pvm use` prints the exact command if the directory is not yet in your PATH.
 
 ## Build
 
 ```sh
 go build -o pvm .
+```
+
+Cross-compile for Windows from Linux/macOS:
+
+```sh
+GOOS=windows GOARCH=amd64 go build -o pvm.exe .
 ```
 
 ## Documentation

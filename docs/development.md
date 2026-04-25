@@ -7,6 +7,12 @@ go build -o pvm .
 ./pvm available
 ```
 
+Cross-compile for Windows from Linux/macOS:
+
+```sh
+GOOS=windows GOARCH=amd64 go build -o pvm.exe .
+```
+
 ## Running tests
 
 ```sh
@@ -20,6 +26,7 @@ go test ./...
 - `internal/` packages must not import `cmd/`.
 - Accept `io.Writer` for output in every function that prints, to keep things testable.
 - Accept `context.Context` as the first argument in every function that does I/O.
+- Use build tags or `_<os>.go` filename suffixes for platform-specific code.
 
 ## Adding a new command
 
@@ -38,20 +45,41 @@ cmds := []*cobra.Command{
 
 ## Adding a new installer backend
 
-`installer.Apt` satisfies the `InstallerFunc` type defined in `cmd/install.go`:
+`installer.Install` dispatches by `runtime.GOOS` in `internal/installer/select.go`. Each backend satisfies the `InstallerFunc` type defined in `cmd/install.go`:
 
 ```go
 type InstallerFunc func(base, ver string) error
 ```
 
-To add a new backend (e.g. compile from source):
-
-1. Create `internal/installer/source.go` and implement `func Source(base, ver string) error`.
-2. In `cmd/install.go`, select the backend based on a flag or runtime detection and pass it to `installVersion`.
-
 The backend is responsible for:
 - Installing the PHP binary by any means.
 - Writing the resolved binary path to `<base>/versions/<ver>/binary`.
+
+### Adding support for a new Linux package manager
+
+Linux installation is handled by `internal/installer/linux.go` using a data-driven approach. Each package manager is described by a `pkgManagerDef` struct:
+
+```go
+type pkgManagerDef struct {
+    bin         string                        // executable to look up in PATH
+    phpPkg      func(branch string) string    // package name (e.g. "php8.3-cli")
+    phpBin      func(branch string) string    // binary path after install
+    installArgs func(pkg string) []string     // full arg list for the install command
+    removeArgs  func(pkg string) []string     // full arg list for the remove command
+    preInstall  func(branch string) error     // optional: add repo before installing
+}
+```
+
+To support a new package manager, append an entry to the `packageManagers` slice in `linux.go`. `detectPackageManager()` iterates the slice in order and returns the first entry whose `bin` is found in `PATH`.
+
+## Platform-specific base directory
+
+`cmd/env.go` (Linux/macOS) and `cmd/env_windows.go` (Windows) both define `baseDir()` using build tags. The `PVM_HOME` environment variable overrides the default on all platforms.
+
+| OS | Default |
+|----|---------|
+| Linux / macOS | `~/.pvm` |
+| Windows | `%LOCALAPPDATA%\pvm` |
 
 ## Resolving version aliases
 
@@ -70,42 +98,39 @@ type stubResolver struct{ v string }
 func (s stubResolver) ResolveLTS() (string, error) { return s.v, nil }
 ```
 
+## Resolving branch → full version
+
+`php.LatestPatch(ctx, branch)` returns the latest full version for a branch (e.g. `"8.3"` → `"8.3.30"`). Used by the Windows installer to construct the download URL.
+
 ## Managing the active version
 
-`internal/symlink` owns the `bin/php` symlink and `current-version` file:
+`internal/symlink` owns the shim/symlink and `current-version` file:
 
 ```go
-// Activate a version (call from a future `pvm use` command)
-err := symlink.SetCurrent(m.Base, "8.4.6", "/usr/bin/php8.4")
-
-// Deactivate (no active version)
+err := symlink.SetCurrent(m.Base, "8.3", "/usr/bin/php8.3")
 err := symlink.RemoveCurrent(m.Base)
-
-// Read the active version (used by `pvm list`)
 ver, err := symlink.GetCurrent(m.Base)
 ```
 
-`SetCurrent` writes `bin/php.tmp` and renames it over `bin/php` atomically, so the symlink is never absent during the swap.
+## Windows: download URL structure
 
-## Detecting system PHP installs
+`windows_download.go` tries URLs in this order per version:
 
-`php.DetectSystem()` returns all PHP binaries found outside pvm, sorted ascending. Use it when you need to show or operate on non-pvm PHP versions:
-
-```go
-installs := php.DetectSystem()
-for _, s := range installs {
-    fmt.Println(s.Version, s.Binary) // e.g. "8.1  /usr/bin/php8.1"
-}
+```
+https://windows.php.net/downloads/releases/php-<ver>-nts-Win32-<vc>-x64.zip
+https://windows.php.net/downloads/releases/php-<ver>-Win32-<vc>-x64.zip
+https://windows.php.net/downloads/releases/archives/php-<ver>-nts-Win32-<vc>-x64.zip
+https://windows.php.net/downloads/releases/archives/php-<ver>-Win32-<vc>-x64.zip
 ```
 
-## Directory layout recap
+VC version mapping:
 
-| Path | Purpose |
-|------|---------|
-| `~/.pvm/versions/<ver>/binary` | Path to the installed PHP binary for version `<ver>` |
-| `~/.pvm/bin/php` | Symlink → active PHP binary; add `~/.pvm/bin` to `$PATH` |
-| `~/.pvm/current-version` | Plain-text file holding the active version name |
-| `$PVM_HOME` | Overrides `~/.pvm` when set |
+| PHP | VC |
+|-----|----|
+| 8.x | vs16 |
+| 7.2 – 7.4 | vc15 |
+| 7.0 – 7.1 | vc14 |
+| 5.x | vc11 |
 
 ## php.net API
 
@@ -117,3 +142,13 @@ for _, s := range installs {
 | `https://www.php.net/releases/index.php?json&max=500&version=<N>` | All patch releases for a major version |
 
 Both return JSON. The HTTP client (`internal/php/http_request.go`) is generic over the response type using Go generics (`httpRequest[T any]`).
+
+## Directory layout recap
+
+| Path (Linux/macOS) | Path (Windows) | Purpose |
+|---|---|---|
+| `~/.pvm/versions/<ver>/binary` | `%LOCALAPPDATA%\pvm\versions\<ver>\binary` | Path to the PHP binary for `<ver>` |
+| `~/.pvm/bin/php` | — | Symlink to active binary (Linux) |
+| `~/.pvm/shims/php` | `%LOCALAPPDATA%\pvm\shims\php.bat` | Shim to active binary (macOS/Windows) |
+| `~/.pvm/current-version` | `%LOCALAPPDATA%\pvm\current-version` | Active version name |
+| `~/.pvm/php/<branch>/` | `%LOCALAPPDATA%\pvm\php\<branch>\` | Extracted PHP install (Windows only) |

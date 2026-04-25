@@ -154,6 +154,28 @@ func fetchReleases(ctx context.Context) ([]Release, error) {
 	return supported, nil
 }
 
+// LatestPatch returns the latest full version for a given branch (e.g. "8.3" → "8.3.30").
+func LatestPatch(ctx context.Context, branch string) (string, error) {
+	parts := splitVersion(branch)
+	if len(parts) < 1 {
+		return "", fmt.Errorf("invalid branch %q", branch)
+	}
+	major := parts[0]
+
+	url := urlBase + "&max=500&version=" + major
+	all, err := httpRequest[MajorResponse](ctx, url, HttpMethod.Get, nil)
+	if err != nil {
+		return "", err
+	}
+
+	best := latestPatchPerBranch(all)
+	v, ok := best[branch]
+	if !ok {
+		return "", fmt.Errorf("no release found for branch %s", branch)
+	}
+	return v, nil
+}
+
 func LatestLTS(ctx context.Context) (string, error) {
 	releases, err := fetchReleases(ctx)
 	if err != nil {

@@ -24,7 +24,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	return removeVersion(
 		args[0],
 		phpfs.NewManager(baseDir()),
-		installer.AptRemove,
+		installer.Remove,
 		cmd.OutOrStdout(),
 		cmd.ErrOrStderr(),
 	)
