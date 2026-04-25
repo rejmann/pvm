@@ -14,7 +14,7 @@ import (
 var AvailableCmd = &cobra.Command{
 	Use:   "available",
 	Short: "List all PHP versions available to install from php.net",
-	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 10 minutes. Use --refresh to force a fresh fetch.",
+	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
 	Args:  cobra.NoArgs,
 	RunE:  runAvailable,
 }
@@ -24,16 +24,12 @@ func initAvailable() {
 }
 
 func runAvailable(cmd *cobra.Command, args []string) error {
-	return printAvailable(cmd.Context(), phpfs.NewManager(baseDir()), cmd.OutOrStdout())
+	refresh, _ := cmd.Flags().GetBool("refresh")
+	return printAvailable(cmd.Context(), phpfs.NewManager(baseDir()), refresh, cmd.OutOrStdout())
 }
 
-func printAvailable(ctx context.Context, m *phpfs.Manager, out io.Writer) error {
-	var (
-		branches []php.Branch
-		err      error
-	)
-
-	branches, err = php.FetchAllBranches(ctx)
+func printAvailable(ctx context.Context, m *phpfs.Manager, forceRefresh bool, out io.Writer) error {
+	branches, err := php.FetchAllBranchesCached(ctx, m.Base, forceRefresh)
 	if err != nil {
 		return err
 	}
