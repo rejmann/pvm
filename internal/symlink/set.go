@@ -114,14 +114,20 @@ func setCurrentWindows(base, version, binaryPath string) error {
 		return fmt.Errorf("create shims directory: %w", err)
 	}
 
-	content := fmt.Sprintf("@echo off\r\n\"%s\" %%*\r\n", binaryPath)
+	// dynamic shim: reads current-version at runtime so switching versions
+	// only requires updating the current-version file — no PATH changes needed
+	content := fmt.Sprintf(
+		"@echo off\r\n"+
+			"set /p PHP_VER=<\"%s\"\r\n"+
+			"\"%s\\%%PHP_VER%%\\php.exe\" %%*\r\n",
+		filepath.Join(base, "current-version"),
+		filepath.Join(base, "php"),
+	)
 	shimPath := filepath.Join(shimDir, "php.bat")
 	if err := os.WriteFile(shimPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("write php shim: %w", err)
 	}
 
-	// ensure shims dir is first in the user PATH so it takes priority over
-	// any system-level PHP (e.g. winget-installed)
 	prependToUserPath(shimDir)
 
 	return writeCurrentVersion(base, version)

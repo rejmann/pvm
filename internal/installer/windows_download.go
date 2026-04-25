@@ -7,15 +7,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
-func downloadAndExtractPHP(ver, branch, destDir string) error {
-	vc := vcForBranch(branch)
-
+func downloadAndExtractPHP(ver, destDir string) error {
 	var lastErr error
-	for _, url := range candidateURLs(ver, vc) {
+	for _, url := range candidateURLs(ver) {
 		fmt.Printf("Trying %s\n", url)
 		if err := downloadExtract(url, destDir); err != nil {
 			lastErr = err
@@ -26,35 +23,21 @@ func downloadAndExtractPHP(ver, branch, destDir string) error {
 	return fmt.Errorf("could not download PHP %s for Windows: %w", ver, lastErr)
 }
 
-func vcForBranch(branch string) string {
-	parts := strings.SplitN(branch, ".", 2)
-	if len(parts) < 2 {
-		return "vs16"
-	}
-	major, _ := strconv.Atoi(parts[0])
-	minor, _ := strconv.Atoi(parts[1])
-	switch {
-	case major >= 8:
-		return "vs16"
-	case major == 7 && minor >= 2:
-		return "vc15"
-	case major == 7:
-		return "vc14"
-	default:
-		return "vc11"
-	}
-}
+// vcVersions lists all known VC strings newest-first.
+// We try them all so no hardcoded mapping per PHP version is needed.
+var vcVersions = []string{"vs17", "vs16", "vc15", "vc14", "vc11"}
 
-func candidateURLs(ver, vc string) []string {
+func candidateURLs(ver string) []string {
 	releases := "https://windows.php.net/downloads/releases"
 	archives := releases + "/archives"
 
 	var urls []string
 	for _, base := range []string{releases, archives} {
-		urls = append(urls,
-			fmt.Sprintf("%s/php-%s-nts-Win32-%s-x64.zip", base, ver, vc),
-			fmt.Sprintf("%s/php-%s-Win32-%s-x64.zip", base, ver, vc),
-		)
+		for _, vc := range vcVersions {
+			urls = append(urls,
+				fmt.Sprintf("%s/php-%s-nts-Win32-%s-x64.zip", base, ver, vc),
+			)
+		}
 	}
 	return urls
 }

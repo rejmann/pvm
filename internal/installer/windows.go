@@ -21,7 +21,7 @@ func WindowsInstall(base, ver string) error {
 	installDir := phpInstallDir(base, branch)
 	fmt.Printf("Downloading PHP %s to %s...\n", fullVer, installDir)
 
-	if err := downloadAndExtractPHP(fullVer, branch, installDir); err != nil {
+	if err := downloadAndExtractPHP(fullVer, installDir); err != nil {
 		return err
 	}
 
