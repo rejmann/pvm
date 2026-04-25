@@ -29,9 +29,15 @@ pvm remove 8.3
 
 | OS | Requirement |
 |----|-------------|
-| Linux (Debian/Ubuntu) | `apt`, `sudo`. Older versions (e.g. 7.4) need the [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) — pvm adds it automatically if needed. |
+| Linux (Debian/Ubuntu) | `apt-get`, `sudo`. Extra PHP branches (e.g. 7.4) need the [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) — pvm adds it automatically. |
+| Linux (Fedora) | `dnf`, `sudo`. Extra branches need the [Remi repo](https://rpms.remirepo.net) — pvm adds it automatically. |
+| Linux (RHEL/CentOS) | `yum`, `sudo`. Extra branches need the [Remi repo](https://rpms.remirepo.net) — pvm adds it automatically. |
+| Linux (Arch) | `pacman`, `sudo`. Only the version available in the official repos can be installed. |
+| Linux (openSUSE) | `zypper`, `sudo`. |
 | macOS | [Homebrew](https://brew.sh) |
 | Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) |
+
+pvm detects the package manager automatically on Linux — no configuration needed.
 
 ## PATH setup
 
@@ -39,7 +45,7 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 | OS | Directory | Shell config |
 |----|-----------|--------------|
-| Linux | `~/.pvm/bin` | `export PATH="$HOME/.pvm/bin:$PATH"` |
+| Linux | `~/.pvm/bin` | `export PATH="$HOME/.pvm/bin:$PATH"` in `~/.bashrc` / `~/.zshrc` |
 | macOS | `~/.pvm/shims` | `export PATH="$HOME/.pvm/shims:$PATH"` |
 | Windows | `%LOCALAPPDATA%\pvm\shims` | `setx PATH "%LOCALAPPDATA%\pvm\shims;%PATH%"` |
 

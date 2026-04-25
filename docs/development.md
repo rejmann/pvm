@@ -55,6 +55,23 @@ The backend is responsible for:
 - Installing the PHP binary by any means.
 - Writing the resolved binary path to `<base>/versions/<ver>/binary`.
 
+### Adding support for a new Linux package manager
+
+Linux installation is handled by `internal/installer/linux.go` using a data-driven approach. Each package manager is described by a `pkgManagerDef` struct:
+
+```go
+type pkgManagerDef struct {
+    bin         string                        // executable to look up in PATH
+    phpPkg      func(branch string) string    // package name (e.g. "php8.3-cli")
+    phpBin      func(branch string) string    // binary path after install
+    installArgs func(pkg string) []string     // full arg list for the install command
+    removeArgs  func(pkg string) []string     // full arg list for the remove command
+    preInstall  func(branch string) error     // optional: add repo before installing
+}
+```
+
+To support a new package manager, append an entry to the `packageManagers` slice in `linux.go`. `detectPackageManager()` iterates the slice in order and returns the first entry whose `bin` is found in `PATH`.
+
 ## Platform-specific base directory
 
 `cmd/env.go` (Linux/macOS) and `cmd/env_windows.go` (Windows) both define `baseDir()` using build tags. The `PVM_HOME` environment variable overrides the default on all platforms.

@@ -29,10 +29,11 @@ pvm/
     │   └── versions.go          # InstalledVersions() — sorted list from versions dir
     ├── installer/
     │   ├── select.go            # Dispatches Install/Remove by runtime.GOOS
-    │   ├── apt.go               # Linux: apt-get + ondrej/php PPA auto-add
+    │   ├── linux.go             # Linux: detects package manager + per-PM install logic
     │   ├── brew.go              # macOS: Homebrew
     │   ├── windows.go           # Windows: download from windows.php.net
-    │   └── windows_download.go  # HTTP download + zip extraction helpers
+    │   ├── windows_download.go  # HTTP download + zip extraction helpers
+    │   └── util.go              # majorMinor() version helper
     ├── symlink/
     │   ├── get.go               # GetCurrent() — reads current-version file
     │   └── set.go               # SetCurrent() / RemoveCurrent() — per-OS switching
@@ -102,9 +103,12 @@ cmd.runInstall
   └─ fs.Manager.EnsurebaseDir()
   └─ fs.Manager.VersionInstalled()
   └─ installer.Install(base, ver)            ← dispatches by runtime.GOOS
-       ├─ Linux:   AptInstall()
-       │    └─ apt-get install phpX.Y-cli
-       │    └─ auto-adds ondrej/php PPA on failure, retries
+       ├─ Linux:   LinuxInstall()
+       │    └─ detectPackageManager()        ← scans PATH for apt-get/dnf/yum/pacman/zypper
+       │    └─ preInstall() if needed:
+       │         ├─ apt-get → adds ondrej/php PPA
+       │         └─ dnf/yum → adds Remi repo
+       │    └─ sudo <pm> install <php-pkg>   ← package name varies by distro
        ├─ macOS:   BrewInstall()
        │    └─ brew install php@X.Y
        └─ Windows: WindowsInstall()
@@ -140,7 +144,7 @@ cmd.runRemove
   └─ fs.Manager.VersionInstalled()
   └─ symlink.GetCurrent()
   └─ installer.Remove(base, ver)             ← dispatches by runtime.GOOS
-       ├─ Linux:   apt-get remove phpX.Y-cli
+       ├─ Linux:   detectPackageManager() → sudo <pm> remove <php-pkg>
        ├─ macOS:   brew uninstall php@X.Y
        └─ Windows: os.RemoveAll(%LOCALAPPDATA%\pvm\php\<branch>\)
   └─ fs.Manager.RemoveVersionDir()

@@ -66,10 +66,16 @@ pvm install 8.3.30    # installs a specific patch version
 
 ### OS backends
 
-| OS | Backend | Notes |
-|----|---------|-------|
-| Linux | `apt-get install php<X.Y>-cli` | Automatically adds ondrej/php PPA if the package is not found |
-| macOS | `brew install php@<X.Y>` | Requires Homebrew |
+pvm detects the available package manager automatically on Linux.
+
+| OS / Distro | Backend | Notes |
+|-------------|---------|-------|
+| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
+| Linux (Fedora) | `dnf install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (Arch) | `pacman -S php` | Only the version in the official repos; no extra repo added |
+| Linux (openSUSE) | `zypper install php<X.Y>` | — |
+| macOS | `brew install php@<X.Y>` | Requires [Homebrew](https://brew.sh) |
 | Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | No external dependency |
 
 ### Windows install directory
