@@ -4,50 +4,81 @@
 
 ```
 pvm/
-├── main.go                  # Entry point — registers Cobra commands
+├── main.go                      # Entry point — registers Cobra commands
+├── system/
+│   └── system.go                # OS constants (Linux, Darwin, Windows)
 ├── cmd/
-│   ├── available.go         # `pvm available` command
-│   ├── install.go           # `pvm install` command
-│   ├── list.go              # `pvm list` command
-│   ├── use.go               # `pvm use` command
-│   ├── remove.go            # `pvm remove` command
-│   ├── lts_resolver.go      # Bridges cobra context → php.LatestLTS
-│   └── env.go               # baseDir() — resolves ~/.pvm or $PVM_HOME
+│   ├── available.go             # `pvm available` command
+│   ├── install.go               # `pvm install` command
+│   ├── list.go                  # `pvm list` command
+│   ├── use.go                   # `pvm use` command
+│   ├── remove.go                # `pvm remove` command
+│   ├── lts_resolver.go          # Bridges cobra context → php.LatestLTS
+│   ├── env.go                   # baseDir() for Linux/macOS → ~/.pvm
+│   └── env_windows.go           # baseDir() for Windows → %LOCALAPPDATA%\pvm
 └── internal/
     ├── php/
-    │   ├── types.go         # Branch, Release, Status types
-    │   ├── releases.go      # Fetches branches from php.net JSON API
-    │   ├── detect.go        # DetectSystem() — finds PHP binaries outside pvm
-    │   ├── util.go          # Version string parsing helpers
-    │   └── http_request.go  # Generic HTTP client with JSON decoding
+    │   ├── types.go             # Branch, Release, Status types
+    │   ├── releases.go          # Fetches branches + LatestPatch from php.net API
+    │   ├── detect.go            # DetectSystem() — finds PHP binaries outside pvm
+    │   ├── util.go              # Version string parsing helpers
+    │   └── http_request.go      # Generic HTTP client with JSON decoding
     ├── fs/
-    │   ├── manager.go       # Manager — wraps ~/.pvm directory structure; RemoveVersionDir
-    │   ├── binary.go        # Read/write binary path; VersionInstalled check
-    │   └── versions.go      # InstalledVersions() — sorted list from versions dir
+    │   ├── manager.go           # Manager — wraps pvm home directory structure
+    │   ├── binary.go            # Read/write binary path; VersionInstalled check
+    │   └── versions.go          # InstalledVersions() — sorted list from versions dir
     ├── installer/
-    │   └── apt.go           # APT installer (ondrej/php PPA)
+    │   ├── select.go            # Dispatches Install/Remove by runtime.GOOS
+    │   ├── apt.go               # Linux: apt-get + ondrej/php PPA auto-add
+    │   ├── brew.go              # macOS: Homebrew
+    │   ├── windows.go           # Windows: download from windows.php.net
+    │   └── windows_download.go  # HTTP download + zip extraction helpers
     ├── symlink/
-    │   ├── get.go           # GetCurrent() — reads ~/.pvm/current-version
-    │   └── set.go           # SetCurrent() / RemoveCurrent() — update-alternatives
+    │   ├── get.go               # GetCurrent() — reads current-version file
+    │   └── set.go               # SetCurrent() / RemoveCurrent() — per-OS switching
     └── version/
-        ├── version.go       # Version struct, Parse(), and Compare()
-        └── lts.go           # Resolver interface and Resolve() for aliases
+        ├── version.go           # Version struct, Parse(), Compare()
+        └── lts.go               # Resolver interface and Resolve() for aliases
 ```
 
 ## Runtime directory structure
 
+### Linux / macOS
+
 ```
 ~/.pvm/                        (or $PVM_HOME)
-├── current-version            # plain text: "8.4" — written by pvm use
+├── current-version            # plain text: "8.3" — written by pvm use
+├── bin/
+│   └── php                    # symlink → active PHP binary (Linux)
+├── shims/
+│   └── php                    # symlink → active PHP binary (macOS)
 └── versions/
-    ├── 8.3.20/
+    ├── 8.3/
     │   └── binary             # plain text: /usr/bin/php8.3
-    └── 8.4.6/
+    └── 8.4/
         └── binary             # plain text: /usr/bin/php8.4
 ```
 
-Active version switching is handled by `update-alternatives` at the system level
-(`/etc/alternatives/php` → `/usr/bin/phpX.Y`), so no PATH configuration is needed.
+### Windows
+
+```
+%LOCALAPPDATA%\pvm\            (or %PVM_HOME%)
+├── current-version            # plain text: "8.3"
+├── shims\
+│   └── php.bat                # batch shim → active php.exe
+├── php\
+│   ├── 8.3\                   # extracted from windows.php.net zip
+│   │   ├── php.exe
+│   │   └── ...
+│   └── 8.4\
+│       ├── php.exe
+│       └── ...
+└── versions\
+    ├── 8.3\
+    │   └── binary             # plain text: C:\Users\...\AppData\Local\pvm\php\8.3\php.exe
+    └── 8.4\
+        └── binary
+```
 
 ## Data flow — `pvm available`
 
@@ -66,13 +97,22 @@ cmd.runAvailable
 ```
 cmd.runInstall
   └─ version.Resolve(arg, phpLTSResolver)
-       └─ if alias "lts" → php.LatestLTS(ctx) → fetchReleases() → highest supported branch
-  └─ version.Parse(concrete)       — validates format
-  └─ fs.Manager.EnsurebaseDir()    — mkdir ~/.pvm/versions
-  └─ fs.Manager.VersionInstalled() — checks binary file + stat
-  └─ installer.AptInstall(base, ver)
-       └─ sudo apt-get install phpX.Y-cli
-       └─ write ~/.pvm/versions/<ver>/binary = /usr/bin/phpX.Y
+       └─ if alias "lts" → php.LatestLTS(ctx)
+  └─ version.Parse(concrete)
+  └─ fs.Manager.EnsurebaseDir()
+  └─ fs.Manager.VersionInstalled()
+  └─ installer.Install(base, ver)            ← dispatches by runtime.GOOS
+       ├─ Linux:   AptInstall()
+       │    └─ apt-get install phpX.Y-cli
+       │    └─ auto-adds ondrej/php PPA on failure, retries
+       ├─ macOS:   BrewInstall()
+       │    └─ brew install php@X.Y
+       └─ Windows: WindowsInstall()
+            └─ php.LatestPatch(ctx, branch)  ← resolves "8.3" → "8.3.30" if needed
+            └─ downloadAndExtractPHP()
+                 └─ tries windows.php.net/releases/ then /archives/
+                 └─ extracts zip to %LOCALAPPDATA%\pvm\php\<branch>\
+            └─ write versions/<ver>/binary = <installDir>\php.exe
 ```
 
 ## Data flow — `pvm use`
@@ -80,58 +120,39 @@ cmd.runInstall
 ```
 cmd.runUse
   └─ version.Resolve(arg, phpLTSResolver)
-       └─ if alias "lts" → php.LatestLTS(ctx)
-  └─ version.Parse(concrete)           — validates format
-  └─ fs.Manager.VersionInstalled()     — errors with "run: pvm install X" if missing
-  └─ fs.Manager.GetVersionBinary()     — reads ~/.pvm/versions/<ver>/binary
-  └─ symlink.SetCurrent(base, ver, binPath)
-       └─ sudo update-alternatives --set php /usr/bin/phpX.Y
-            └─ updates /etc/alternatives/php → /usr/bin/phpX.Y
-            └─ /usr/bin/php now resolves to the chosen version
-       └─ os.WriteFile(current-version)
+  └─ fs.Manager.VersionInstalled()
+  └─ fs.Manager.GetVersionBinary()
+  └─ symlink.SetCurrent(base, ver, binPath)  ← dispatches by runtime.GOOS
+       ├─ Linux:   update-alternatives --set php <binary>
+       │           + ~/.pvm/bin/php symlink
+       ├─ macOS:   ~/.pvm/shims/php symlink
+       └─ Windows: resolves php.exe from %LOCALAPPDATA%\pvm\php\<branch>\
+                   writes %LOCALAPPDATA%\pvm\shims\php.bat
+  └─ writeCurrentVersion(base, ver)
+  └─ printPathHint() if shim dir not in PATH
 ```
 
 ## Data flow — `pvm remove`
 
 ```
 cmd.runRemove
-  └─ version.Parse(arg)                — validates format (no alias support)
-  └─ fs.Manager.VersionInstalled()     — errors if not installed
-  └─ symlink.GetCurrent()              — checks if this version is the active one
+  └─ version.Parse(arg)
+  └─ fs.Manager.VersionInstalled()
+  └─ symlink.GetCurrent()
+  └─ installer.Remove(base, ver)             ← dispatches by runtime.GOOS
+       ├─ Linux:   apt-get remove phpX.Y-cli
+       ├─ macOS:   brew uninstall php@X.Y
+       └─ Windows: os.RemoveAll(%LOCALAPPDATA%\pvm\php\<branch>\)
   └─ fs.Manager.RemoveVersionDir()
-       └─ os.RemoveAll(~/.pvm/versions/<ver>/)
   └─ if was active → symlink.RemoveCurrent()
-       └─ sudo update-alternatives --auto php  ← system picks next available
-       └─ removes current-version file
-       └─ prints warning to stderr: "No version is now active."
-  └─ prints "PHP <ver> removed." to stdout
-```
-
-## Data flow — `pvm list`
-
-```
-cmd.runList
-  └─ fs.Manager.InstalledVersions()
-       └─ os.ReadDir(~/.pvm/versions/)
-            └─ filters: valid version name + VersionInstalled (binary file + stat)
-            └─ sorted by Version.Compare()
-  └─ symlink.GetCurrent(base)
-       └─ reads ~/.pvm/current-version → marks matching entry as "(current)"
-  └─ php.DetectSystem()
-       └─ glob: /usr/bin/php[0-9]*, /usr/local/bin/php[0-9]*, Homebrew paths
-       └─ also: exec.LookPath("php") for plain php in $PATH
-       └─ each binary → php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"
-       └─ deduplicates by version string, sorted by Version.Compare()
-  └─ prints pvm-managed group, then system group (skipping overlap)
 ```
 
 ## Key design decisions
 
-- **`internal/` boundary** — `php`, `fs`, `installer`, `version` are independent packages with no circular imports. Commands wire them together.
-- **`InstallerFunc` type** — `install.go` accepts `func(base, ver string) error`, making it easy to swap `apt` for another backend (e.g. source compilation) without changing the command.
+- **Platform-specific `baseDir()`** — `cmd/env.go` (`~/.pvm`) and `cmd/env_windows.go` (`%LOCALAPPDATA%\pvm`) use build tags so each OS follows its own convention.
+- **Windows: direct download instead of a package manager** — winget treats all PHP versions as the same product (shared Windows Installer GUID), making side-by-side installs impossible. Downloading zips from `windows.php.net` lets pvm own every version in its own isolated directory.
+- **`InstallerFunc` type** — `install.go` accepts `func(base, ver string) error`, making it easy to swap backends without changing the command layer.
 - **`version.Resolver` interface** — decouples alias resolution from the php.net API, enabling unit-testing without network calls.
-- **`binary` file** — stores only the resolved binary path. This keeps version detection O(1) (a single file read + stat) and lets the installer be the sole authority on where the binary lives.
-- **Concurrent branch fetching** — `FetchAllBranches` launches one goroutine per active major version and fans in the results, reducing latency when php.net is slow.
-- **`update-alternatives` for version switching** — `pvm use` delegates to Debian/Ubuntu's `update-alternatives` system rather than managing PATH or symlinks in user directories. This is shell-agnostic: `/usr/bin/php` resolves to the selected version for all processes, regardless of shell or environment.
-- **`current-version` file** — a plain-text file at `~/.pvm/current-version` tracking the pvm-active version; read by `pvm list` and written by `pvm use`. It does not drive the actual binary resolution (that's `update-alternatives`), but provides fast local state for display.
-- **System PHP detection in `pvm list`** — `DetectSystem` runs each candidate binary with `php -r "…"` rather than parsing binary names, so it works regardless of naming conventions (e.g. Homebrew's `opt/php@8.3/bin/php`). Versions already managed by pvm are filtered out of the system group to avoid duplicates.
+- **`binary` file** — stores only the resolved binary path, keeping version detection O(1) (one file read + stat).
+- **Concurrent branch fetching** — `FetchAllBranches` fans out one goroutine per active major version, reducing latency when php.net is slow.
+- **`current-version` file** — plain-text file tracking the active version; used by `pvm list`. On Linux it is complementary to `update-alternatives`; on Windows/macOS it is the sole source of truth for display.

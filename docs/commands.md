@@ -5,10 +5,7 @@
 Lists all PHP branches available to install from php.net.
 
 ```
-pvm available [flags]
-
-Flags:
-  -r, --refresh   Force a fresh fetch (cache is not yet implemented — flag reserved)
+pvm available
 ```
 
 ### Output
@@ -17,14 +14,14 @@ Flags:
 Install with: pvm install <branch>  (e.g. pvm install 8.4)
               pvm install lts       (installs newest supported branch)
 
-12 branches listed.
+18 branches listed.
 
   BRANCH    LATEST        STATUS
   --------  ------------  -------------
-  8.4       8.4.6         supported
-  8.3       8.3.20        supported
-  8.2       8.2.27        supported
-  8.1       8.1.31        eol
+  8.4       8.4.20        supported
+  8.3       8.3.30        supported
+  8.2       8.2.30        supported
+  7.4       7.4.33        eol
   ...
 ```
 
@@ -34,51 +31,69 @@ Install with: pvm install <branch>  (e.g. pvm install 8.4)
 
 ### How it works
 
-Hits `https://www.php.net/releases/index.php?json` to get the list of active majors, then launches one concurrent request per major to retrieve all patches. It retains only the highest patch per branch.
+Hits `https://www.php.net/releases/index.php?json` to get the list of active majors, then launches one concurrent request per major to retrieve all patches. Retains only the highest patch per branch.
 
 ---
 
-## `pvm remove <version>`
+## `pvm install <version|lts>`
 
-Removes an installed PHP version managed by pvm.
+Installs a PHP version using the appropriate backend for the current OS.
 
 ```
-pvm remove <version>
+pvm install <version|lts>
 
 Arguments:
-  version   Exact version string as installed (e.g. 8.3.20)
+  version   Branch (e.g. 8.3) or full version (e.g. 8.3.30)
+  lts       Alias — resolves to the highest currently-supported branch
 ```
 
 ### Examples
 
 ```sh
-pvm remove 8.3.20
+pvm install lts       # installs the latest LTS branch
+pvm install 8.3       # installs the latest 8.3.x patch
+pvm install 8.3.30    # installs a specific patch version
 ```
 
 ### What it does
 
-1. Validates the version string format.
-2. Fails if the version is not installed.
-3. Deletes `~/.pvm/versions/<ver>/` and all its contents.
-4. If the removed version was the active one, removes `~/.pvm/bin/php` and `~/.pvm/current-version`, and prints a warning to stderr:
-   ```
-   Warning: PHP 8.3.20 was the active version. No version is now active.
-   ```
-5. Prints `PHP 8.3.20 removed.` to stdout.
+1. Resolves `lts` alias to the highest supported branch name.
+2. Validates the version string format.
+3. Skips installation if the version is already installed.
+4. Runs the OS-appropriate installer (see below).
+5. Writes the resolved binary path to `<pvm-home>/versions/<ver>/binary`.
+6. Prints a PATH hint if the pvm shim directory is not yet in `$PATH`.
 
-> After removing the active version, run `pvm use <other-version>` to activate another one.
+### OS backends
+
+| OS | Backend | Notes |
+|----|---------|-------|
+| Linux | `apt-get install php<X.Y>-cli` | Automatically adds ondrej/php PPA if the package is not found |
+| macOS | `brew install php@<X.Y>` | Requires Homebrew |
+| Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | No external dependency |
+
+### Windows install directory
+
+Each branch is isolated under the pvm home:
+
+```
+%LOCALAPPDATA%\pvm\php\8.3\php.exe
+%LOCALAPPDATA%\pvm\php\8.5\php.exe
+```
+
+> `PVM_HOME` environment variable overrides the default pvm home directory on all platforms.
 
 ---
 
 ## `pvm use <version|lts>`
 
-Switches the active PHP version by updating the `~/.pvm/bin/php` symlink.
+Switches the active PHP version.
 
 ```
 pvm use <version|lts>
 
 Arguments:
-  version   Full version (e.g. 8.3.20) or branch (e.g. 8.3) as recorded by pvm install
+  version   Full version or branch as recorded by pvm install
   lts       Alias — resolves to the highest currently-supported branch
 ```
 
@@ -91,30 +106,35 @@ pvm use lts       # activates e.g. 8.4
 
 ### What it does
 
-1. Resolves `lts` to the highest supported branch name if needed.
-2. Validates the version string format.
-3. Fails with a helpful error if the version is not yet installed:
-   ```
-   8.3 not installed — run: pvm install 8.3
-   ```
-4. Reads the binary path from `~/.pvm/versions/<ver>/binary`.
-5. Atomically replaces `~/.pvm/bin/php` with a symlink to that binary.
-6. Writes the active version to `~/.pvm/current-version`.
+1. Resolves `lts` alias if needed.
+2. Fails with a helpful error if the version is not installed.
+3. Reads the binary path from `<pvm-home>/versions/<ver>/binary`.
+4. Updates the active version via the OS-appropriate mechanism (see below).
+5. Writes the active version to `<pvm-home>/current-version`.
+6. Prints a PATH hint if the shim directory is not in `$PATH`.
+
+### OS switching mechanism
+
+| OS | Mechanism |
+|----|-----------|
+| Linux | `sudo update-alternatives --set php <binary>` + `~/.pvm/bin/php` symlink |
+| macOS | Symlink at `~/.pvm/shims/php` |
+| Windows | Batch shim at `%LOCALAPPDATA%\pvm\shims\php.bat` pointing to the installed `php.exe` |
 
 ### Typical workflow
 
 ```sh
 pvm install 8.3
 pvm install 8.4
-pvm use 8.4       # → Now using PHP 8.4.6.
-pvm use 8.3       # → Now using PHP 8.3.20.
+pvm use 8.4       # → Now using PHP 8.4.20.
+pvm use 8.3       # → Now using PHP 8.3.30.
 ```
 
 ---
 
 ## `pvm list`
 
-Lists all PHP versions found on the machine, split into two groups.
+Lists all PHP versions found on the machine.
 
 ```
 pvm list
@@ -124,68 +144,37 @@ pvm list
 
 ```
 pvm managed:
-  8.3.20
-  8.4.6  (current)
+  8.3  (current)
+  8.4
 system:
   8.1  (/usr/bin/php8.1)
 ```
 
 **Groups:**
-- `pvm managed` — versions installed via `pvm install`, stored under `~/.pvm/versions/`. The version set as active via `pvm use` is marked `(current)`.
-- `system` — PHP binaries found on the host **outside** of pvm (e.g. distro package, Homebrew). Versions already tracked by pvm are excluded from this group to avoid duplicates.
-
-If no PHP versions are found at all:
-
-```
-No PHP versions found.
-Run 'pvm available' to see installable versions.
-```
-
-### How it works
-
-1. Reads `~/.pvm/versions/` to build the managed list (sorted ascending by version).
-2. Reads `~/.pvm/current-version` to mark the active version.
-3. Runs `DetectSystem()` which globs well-known binary locations (`/usr/bin/php[0-9]*`, `/usr/local/bin/php[0-9]*`, Homebrew paths) and also checks `php` in `$PATH`. For each candidate it executes `php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"` to confirm the version.
+- `pvm managed` — versions installed via `pvm install`. The active version is marked `(current)`.
+- `system` — PHP binaries found outside pvm. Versions already tracked by pvm are excluded.
 
 ---
 
-## `pvm install <version|lts>`
+## `pvm remove <version>`
 
-Installs a PHP version using the system `apt` package manager.
+Removes a pvm-managed PHP version.
 
 ```
-pvm install <version|lts>
+pvm remove <version>
 
 Arguments:
-  version   Branch (e.g. 8.3) or full version (e.g. 8.3.20)
-  lts       Alias — resolves to the highest currently-supported branch
-```
-
-### Examples
-
-```sh
-pvm install lts       # installs e.g. 8.4
-pvm install 8.3       # installs php8.3-cli via apt
-pvm install 8.3.20    # same package — apt resolves the branch
+  version   Exact version string as installed (e.g. 8.3)
 ```
 
 ### What it does
 
-1. Resolves `lts` alias to the highest supported branch name (e.g. `8.4`).
-2. Validates the version string format.
-3. Creates `~/.pvm/versions/` if it does not exist.
-4. Skips installation if the version is already installed.
-5. Runs `sudo apt-get install -y php<X.Y>-cli`.
-6. Writes the resolved binary path to `~/.pvm/versions/<ver>/binary`.
-7. Prints a PATH hint if `~/.pvm/bin` is not first in `$PATH`.
+1. Validates the version string format.
+2. Fails if the version is not installed.
+3. Removes the version files/directory.
+4. If the removed version was active, clears `current-version` and prints a warning:
+   ```
+   Warning: PHP 8.3 was the active version. No version is now active.
+   ```
 
-### Prerequisites
-
-The [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) must be added before installing non-distro PHP versions:
-
-```sh
-sudo add-apt-repository ppa:ondrej/php
-sudo apt-get update
-```
-
-> `PVM_HOME` environment variable overrides the default `~/.pvm` directory.
+> On Windows, `pvm remove` deletes `%LOCALAPPDATA%\pvm\php\<branch>\` entirely.
