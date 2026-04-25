@@ -1,48 +1,33 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/php"
 )
 
 func WindowsInstall(base, ver string) error {
 	branch := majorMinor(ver)
 
-	if _, err := exec.LookPath("winget"); err != nil {
-		return fmt.Errorf("winget not found — install App Installer from the Microsoft Store")
-	}
-
-	pkgID, err := wingetFindPHP(branch)
+	fullVer, err := resolveFullVersion(ver, branch)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve PHP %s: %w", ver, err)
 	}
 
-	// each branch gets its own isolated directory under pvm home
 	installDir := phpInstallDir(base, branch)
-	if err := os.MkdirAll(installDir, 0755); err != nil {
-		return fmt.Errorf("create install directory: %w", err)
-	}
+	fmt.Printf("Downloading PHP %s to %s...\n", fullVer, installDir)
 
-	cmd := exec.Command(
-		"winget", "install",
-		"--id", pkgID,
-		"--location", installDir,
-		"--silent",
-		"--accept-package-agreements",
-		"--accept-source-agreements",
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("winget install %s: %w", pkgID, err)
+	if err := downloadAndExtractPHP(fullVer, branch, installDir); err != nil {
+		return err
 	}
 
 	binPath := filepath.Join(installDir, "php.exe")
 	if _, err := os.Stat(binPath); err != nil {
-		return fmt.Errorf("PHP binary not found at %s after installation", binPath)
+		return fmt.Errorf("php.exe not found at %s after extraction", binPath)
 	}
 
 	verDir := filepath.Join(base, "versions", ver)
@@ -55,50 +40,26 @@ func WindowsInstall(base, ver string) error {
 
 func WindowsRemove(base, ver string) error {
 	branch := majorMinor(ver)
-
-	if _, err := exec.LookPath("winget"); err != nil {
-		return fmt.Errorf("winget not found — install App Installer from the Microsoft Store")
-	}
-
-	pkgID, err := wingetFindPHP(branch)
-	if err != nil {
-		return fmt.Errorf("PHP %s not found in winget: %w", ver, err)
-	}
-
 	installDir := phpInstallDir(base, branch)
-	cmd := exec.Command(
-		"winget", "uninstall",
-		"--id", pkgID,
-		"--location", installDir,
-		"--silent",
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("winget uninstall %s: %w", pkgID, err)
+
+	if _, err := os.Stat(installDir); os.IsNotExist(err) {
+		return fmt.Errorf("PHP %s is not installed", ver)
 	}
-	return nil
+
+	return os.RemoveAll(installDir)
 }
 
-func wingetFindPHP(branch string) (string, error) {
-	out, err := exec.Command("winget", "search", "PHP.PHP", "--source", "winget").Output()
-	if err != nil {
-		return "", fmt.Errorf("winget search: %w", err)
+// resolveFullVersion returns the full patch version.
+// If ver already has three parts (e.g. "8.3.30"), it is returned as-is.
+// Otherwise (e.g. "8.3"), the latest patch is fetched from php.net.
+func resolveFullVersion(ver, branch string) (string, error) {
+	if len(strings.Split(ver, ".")) == 3 {
+		return ver, nil
 	}
-
-	target := "PHP.PHP." + branch
-	for _, line := range strings.Split(string(out), "\n") {
-		for _, f := range strings.Fields(line) {
-			if strings.EqualFold(f, target) {
-				return target, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("PHP %s not found in winget — run: pvm available", branch)
+	return php.LatestPatch(context.Background(), branch)
 }
 
-// phpInstallDir returns the isolated directory for a PHP branch under pvm home.
+// phpInstallDir is the isolated directory for a PHP branch under pvm home.
 // e.g. %LOCALAPPDATA%\pvm\php\8.3
 func phpInstallDir(base, branch string) string {
 	return filepath.Join(base, "php", branch)
