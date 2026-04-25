@@ -10,7 +10,7 @@ import (
 func Install(base, ver string) error {
 	switch runtime.GOOS {
 	case system.Linux:
-		return AptInstall(base, ver)
+		return LinuxInstall(base, ver)
 	case system.Darwin:
 		return BrewInstall(base, ver)
 	case system.Windows:
@@ -23,7 +23,7 @@ func Install(base, ver string) error {
 func Remove(base, ver string) error {
 	switch runtime.GOOS {
 	case system.Linux:
-		return AptRemove(base, ver)
+		return LinuxRemove(base, ver)
 	case system.Darwin:
 		return BrewRemove(base, ver)
 	case system.Windows:
