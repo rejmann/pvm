@@ -11,22 +11,11 @@ import (
 func WindowsInstall(base, ver string) error {
 	branch := majorMinor(ver)
 
-	if _, err := exec.LookPath("winget"); err == nil {
-		if err := wingetInstall(ver, branch); err == nil {
-			return windowsSaveBinary(base, ver, branch)
-		}
-		fmt.Printf("winget could not install PHP %s, trying Chocolatey...\n", ver)
+	if _, err := exec.LookPath("winget"); err != nil {
+		return fmt.Errorf("winget not found — install App Installer from the Microsoft Store")
 	}
 
-	if _, err := exec.LookPath("choco"); err != nil {
-		return fmt.Errorf(
-			"no package manager found\n\n" +
-				"Install via winget:  winget install PHP.PHP." + branch + "\n" +
-				"Or install Chocolatey from https://chocolatey.org",
-		)
-	}
-
-	if err := chocoInstall(ver); err != nil {
+	if err := wingetInstall(ver, branch); err != nil {
 		return err
 	}
 	return windowsSaveBinary(base, ver, branch)
@@ -35,30 +24,30 @@ func WindowsInstall(base, ver string) error {
 func WindowsRemove(base, ver string) error {
 	branch := majorMinor(ver)
 
-	if _, err := exec.LookPath("winget"); err == nil {
-		cmd := exec.Command("winget", "uninstall", "--id", "PHP.PHP."+branch, "--silent")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
+	if _, err := exec.LookPath("winget"); err != nil {
+		return fmt.Errorf("winget not found — install App Installer from the Microsoft Store")
 	}
 
-	if _, err := exec.LookPath("choco"); err != nil {
-		return fmt.Errorf("no package manager found to remove PHP %s", ver)
+	pkgID, err := wingetFindPHP(branch)
+	if err != nil {
+		return fmt.Errorf("PHP %s not found in winget: %w", ver, err)
 	}
 
-	cmd := exec.Command("choco", "uninstall", "php", "-y")
+	cmd := exec.Command("winget", "uninstall", "--id", pkgID, "--silent")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("choco uninstall php: %w", err)
+		return fmt.Errorf("winget uninstall %s: %w", pkgID, err)
 	}
 	return nil
 }
 
 func wingetInstall(ver, branch string) error {
-	pkgID := "PHP.PHP." + branch
+	pkgID, err := wingetFindPHP(branch)
+	if err != nil {
+		return err
+	}
+
 	cmd := exec.Command(
 		"winget", "install",
 		"--id", pkgID,
@@ -74,15 +63,25 @@ func wingetInstall(ver, branch string) error {
 	return nil
 }
 
-func chocoInstall(ver string) error {
-	cmd := exec.Command("choco", "install", "php", "--version="+ver, "-y", "--allow-downgrade")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("choco install php --version=%s: %w", ver, err)
+func wingetFindPHP(branch string) (string, error) {
+	out, err := exec.Command("winget", "search", "PHP.PHP", "--source", "winget").Output()
+	if err != nil {
+		return "", fmt.Errorf("winget search: %w", err)
 	}
-	return nil
+
+	target := "PHP.PHP." + branch
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		for _, f := range fields {
+			if strings.EqualFold(f, target) {
+				return target, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("PHP %s not found in winget", branch)
 }
+
 
 func windowsSaveBinary(base, ver, branch string) error {
 	binPath, err := findWindowsBinary(branch)
