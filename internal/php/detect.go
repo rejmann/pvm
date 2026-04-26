@@ -1,7 +1,6 @@
 package php
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -60,54 +59,6 @@ func DetectSystem() []SystemInstall {
 		return a.Compare(b) < 0
 	})
 	return results
-}
-
-func platformGlobs() []string {
-	switch runtime.GOOS {
-	case system.Windows:
-		return windowsGlobs()
-	case system.Darwin:
-		return darwinGlobs()
-	default:
-		return linuxGlobs()
-	}
-}
-
-func linuxGlobs() []string {
-	return []string{
-		"/usr/bin/php[0-9]*",
-		"/usr/local/bin/php[0-9]*",
-	}
-}
-
-func darwinGlobs() []string {
-	return []string{
-		"/opt/homebrew/opt/php*/bin/php", // Apple Silicon Homebrew
-		"/usr/local/opt/php*/bin/php",    // Intel Homebrew
-		"/opt/homebrew/bin/php[0-9]*",
-		"/usr/local/bin/php[0-9]*",
-		"/opt/local/bin/php[0-9]*", // MacPorts
-	}
-}
-
-func windowsGlobs() []string {
-	globs := []string{
-		`C:\tools\php*\php.exe`,
-		`C:\php*\php.exe`,
-		`C:\ProgramData\chocolatey\lib\php*\tools\php.exe`,
-	}
-
-	if phprc := os.Getenv("PHPRC"); phprc != "" {
-		globs = append(globs, filepath.Join(phprc, "php.exe"))
-	}
-
-	if home, err := os.UserHomeDir(); err == nil {
-		globs = append(globs,
-			filepath.Join(home, "scoop", "apps", "php*", "current", "php.exe"),
-		)
-	}
-
-	return globs
 }
 
 func queryVersion(bin string) string {
