@@ -14,7 +14,8 @@ import (
 type RemoverFunc func(base, ver string) error
 
 var RemoveCmd = &cobra.Command{
-	Use:   "remove <version>",
+	Use:     "remove <version>",
+	Aliases: []string{"rm"},
 	Short: "Remove an installed PHP version",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runRemove,
