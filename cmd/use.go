@@ -16,7 +16,7 @@ import (
 )
 
 var UseCmd = &cobra.Command{
-	Use:     "use <version|lts>",
+	Use:     "use [u] <version|lts>",
 	Aliases: []string{"u"},
 	Short: "Switch to a PHP version",
 	Args:  cobra.ExactArgs(1),

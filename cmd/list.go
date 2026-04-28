@@ -12,7 +12,7 @@ import (
 )
 
 var ListCmd = &cobra.Command{
-	Use:     "list",
+	Use:     "list [ls]",
 	Aliases: []string{"ls"},
 	Short: "List installed PHP versions",
 	Args:  cobra.NoArgs,

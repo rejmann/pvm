@@ -12,7 +12,7 @@ import (
 )
 
 var AvailableCmd = &cobra.Command{
-	Use:     "available",
+	Use:     "available [a]",
 	Aliases: []string{"a"},
 	Short: "List all PHP versions available to install from php.net",
 	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
