@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "pvm",
-	Short:         "PVM is a tool for managing multiple versions of PHP",
+	Short:         "PVM is a tool for managing multiple versions of PHP.",
 	Long:          `PVM is a tool for managing multiple versions of PHP, allowing you to easily switch between different versions for different projects.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -23,6 +23,7 @@ func main() {
 		cmd.ListCmd,
 		cmd.UseCmd,
 		cmd.RemoveCmd,
+		cmd.CurrentCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 

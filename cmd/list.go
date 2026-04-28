@@ -12,10 +12,11 @@ import (
 )
 
 var ListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List installed PHP versions",
-	Args:  cobra.NoArgs,
-	RunE:  runList,
+	Use:     "list [ls]",
+	Aliases: []string{"ls"},
+	Short:   "List installed PHP versions",
+	Args:    cobra.NoArgs,
+	RunE:    runList,
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -29,7 +30,6 @@ func listVersions(m *phpfs.Manager, out io.Writer) error {
 	}
 
 	current, _ := symlink.GetCurrent(m.Base)
-	system := php.DetectSystem()
 
 	managedSet := map[string]bool{}
 	for _, v := range managed {
@@ -49,6 +49,8 @@ func listVersions(m *phpfs.Manager, out io.Writer) error {
 		}
 		printed = true
 	}
+
+	system := php.DetectSystem()
 
 	var unmanaged []php.SystemInstall
 	for _, s := range system {
