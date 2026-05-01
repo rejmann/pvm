@@ -5,10 +5,9 @@
 ```
 pvm/
 ├── main.go                      # Entry point — registers Cobra commands
-├── system/
-│   └── system.go                # OS constants (Linux, Darwin, Windows)
 ├── cmd/
 │   ├── available.go             # `pvm available` command
+│   ├── current.go               # `pvm current` command
 │   ├── install.go               # `pvm install` command
 │   ├── list.go                  # `pvm list` command
 │   ├── use.go                   # `pvm use` command
@@ -18,9 +17,12 @@ pvm/
 │   └── env_windows.go           # baseDir() for Windows → %LOCALAPPDATA%\pvm
 └── internal/
     ├── php/
-    │   ├── types.go             # Branch, Release, Status types
+    │   ├── types.go             # Branch, Release, Status, SystemInstall types
     │   ├── releases.go          # Fetches branches + LatestPatch from php.net API
-    │   ├── detect.go            # DetectSystem() — finds PHP binaries outside pvm
+    │   ├── cache.go             # 24-hour cache for available versions
+    │   ├── detect.go            # DetectSystem() dispatcher
+    │   ├── detect_unix.go       # Unix: find PHP in common paths
+    │   ├── detect_windows.go    # Windows: scan registry for PHP
     │   ├── util.go              # Version string parsing helpers
     │   └── http_request.go      # Generic HTTP client with JSON decoding
     ├── fs/
@@ -28,7 +30,8 @@ pvm/
     │   ├── binary.go            # Read/write binary path; VersionInstalled check
     │   └── versions.go          # InstalledVersions() — sorted list from versions dir
     ├── installer/
-    │   ├── select.go            # Dispatches Install/Remove by runtime.GOOS
+    │   ├── select_unix.go       # Unix: dispatches Install/Remove by runtime.GOOS
+    │   ├── select_windows.go    # Windows: dispatches Install/Remove
     │   ├── linux.go             # Linux: detects package manager + per-PM install logic
     │   ├── brew.go              # macOS: Homebrew
     │   ├── windows.go           # Windows: download from windows.php.net
@@ -36,7 +39,11 @@ pvm/
     │   └── util.go              # majorMinor() version helper
     ├── symlink/
     │   ├── get.go               # GetCurrent() — reads current-version file
-    │   └── set.go               # SetCurrent() / RemoveCurrent() — per-OS switching
+    │   ├── set.go               # SetCurrent() / RemoveCurrent() dispatcher
+    │   ├── set_unix.go          # Unix: symlinks + update-alternatives (Linux)
+    │   └── set_windows.go       # Windows: batch shim
+    ├── system/
+    │   └── system.go            # OS constants (Linux, Darwin, Windows)
     └── version/
         ├── version.go           # Version struct, Parse(), Compare()
         └── lts.go               # Resolver interface and Resolve() for aliases
@@ -149,6 +156,25 @@ cmd.runRemove
        └─ Windows: os.RemoveAll(%LOCALAPPDATA%\pvm\php\<branch>\)
   └─ fs.Manager.RemoveVersionDir()
   └─ if was active → symlink.RemoveCurrent()
+```
+
+## Data flow — `pvm list`
+
+```
+cmd.runList
+  └─ symlink.GetCurrent()                    ← reads current-version file
+  └─ fs.Manager.InstalledVersions()          ← sorted list from versions dir
+  └─ php.DetectSystem()                      ← finds PHP binaries outside pvm
+  └─ print grouped table to stdout
+```
+
+## Data flow — `pvm current`
+
+```
+cmd.runCurrent
+  └─ symlink.GetCurrent(base)                ← reads current-version file
+       ├─ version found → print "Current PHP version: <ver>"
+       └─ ErrNoCurrentVersion → print "No PHP version is currently active."
 ```
 
 ## Key design decisions

@@ -37,6 +37,10 @@ go test ./...
 cmds := []*cobra.Command{
     cmd.AvailableCmd,
     cmd.InstallCmd,
+    cmd.ListCmd,
+    cmd.UseCmd,
+    cmd.RemoveCmd,
+    cmd.CurrentCmd,
     cmd.YourNewCmd,   // add here
 }
 ```
