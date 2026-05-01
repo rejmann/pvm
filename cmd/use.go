@@ -10,17 +10,17 @@ import (
 
 	phpfs "github.com/rejmann/pvm/internal/fs"
 	"github.com/rejmann/pvm/internal/symlink"
+	"github.com/rejmann/pvm/internal/system"
 	"github.com/rejmann/pvm/internal/version"
-	"github.com/rejmann/pvm/system"
 	"github.com/spf13/cobra"
 )
 
 var UseCmd = &cobra.Command{
 	Use:     "use [u] <version|lts>",
 	Aliases: []string{"u"},
-	Short: "Switch to a PHP version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUse,
+	Short:   "Switch to a PHP version",
+	Args:    cobra.ExactArgs(1),
+	RunE:    runUse,
 }
 
 func runUse(cmd *cobra.Command, args []string) error {
