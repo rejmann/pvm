@@ -1,15 +1,17 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   version:
+    if: |
+      github.event.pull_request.merged == true
     uses: rejmann/github-actions/.github/workflows/version-tag.yml@main
     secrets: inherit
 
