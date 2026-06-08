@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/rejmann/pvm/system"
+	"github.com/rejmann/pvm/internal/system"
 )
 
 func Install(base, ver string) error {
