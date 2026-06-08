@@ -62,11 +62,16 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            bin: pvm
+            archive_ext: .tar.gz
           - goos: darwin
             goarch: arm64
+            bin: pvm
+            archive_ext: .tar.gz
           - goos: windows
             goarch: amd64
-            ext: .exe
+            bin: pvm.exe
+            archive_ext: .zip
 
     steps:
       - uses: actions/checkout@v4
@@ -82,15 +87,27 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          OUT=pvm-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-          go build -ldflags "-s -w -X github.com/rejmann/pvm/cmd.version=${{ needs.version.outputs.version }}" \
-            -o dist/${OUT} .
+          set -euo pipefail
+
+          MODULE_PATH=$(go list -m)
+          OUT_DIR=dist/${{ matrix.goos }}-${{ matrix.goarch }}
+          BIN=${{ matrix.bin }}
+          mkdir -p "${OUT_DIR}"
+
+          go build -ldflags "-s -w -X \
+            ${MODULE_PATH}/cmd.version=${{ needs.version.outputs.version }}" \
+            -o "${OUT_DIR}/${BIN}" .
+
+          cd "${OUT_DIR}"
+
+          PACK_CMD=$([ "${{ matrix.goos }}" = "windows" ] && echo "zip -9" || echo "tar -czf")
+          ${PACK_CMD} "../pvm-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.archive_ext }}" "${BIN}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pvm-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/pvm-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          path: dist/pvm-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.archive_ext }}
 
   release:
     name: Publish Release
