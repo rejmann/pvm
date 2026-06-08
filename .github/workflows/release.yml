@@ -9,8 +9,12 @@ permissions:
   contents: write
 
 jobs:
+  ping:
+    uses: rejmann/github-actions/.github/workflows/version-tag.yml@main
+    secrets: inherit
+
   version:
-    uses: "rejmann/github-actions/.github/workflows/version-tag.yml@main"
+    uses: rejmann/github-actions/.github/workflows/version-tag.yml@main
     secrets: inherit
 
   build:
