@@ -52,6 +52,32 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 > `pvm use` prints the exact command if the directory is not yet in your PATH.
 
+## Install from GitHub Releases
+
+Use the stable `latest` release links below. They always point to the newest published version, so you do not need to update tags manually.
+
+Linux (amd64):
+
+```sh
+curl -fL https://github.com/rejmann/pvm/releases/latest/download/pvm-linux-amd64 -o pvm
+chmod +x pvm
+sudo mv pvm /usr/local/bin/pvm
+```
+
+macOS (arm64):
+
+```sh
+curl -fL https://github.com/rejmann/pvm/releases/latest/download/pvm-darwin-arm64 -o pvm
+chmod +x pvm
+sudo mv pvm /usr/local/bin/pvm
+```
+
+Windows (amd64 PowerShell):
+
+```powershell
+Invoke-WebRequest https://github.com/rejmann/pvm/releases/latest/download/pvm-windows-amd64.exe -OutFile pvm.exe
+```
+
 ## Build
 
 ```sh
