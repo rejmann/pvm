@@ -11,6 +11,7 @@ permissions:
 jobs:
   version:
     uses: "rejmann/github-actions/.github/workflows/version-tag.yml@main"
+    secrets: inherit
 
   build:
     name: Build & Release
