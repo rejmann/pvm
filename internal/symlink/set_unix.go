@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/rejmann/pvm/system"
+	"github.com/rejmann/pvm/internal/system"
 )
 
 func RemoveCurrent(base string) error {

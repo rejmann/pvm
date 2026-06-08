@@ -6,23 +6,24 @@
 
 ```sh
 # List available PHP versions from php.net
-pvm available
+pvm available          # alias: a
 
 # Install the current LTS branch
-pvm install lts
-
-# Install a specific branch
+pvm install lts        # alias: i
 pvm install 8.3
 
 # List installed versions
-pvm list
+pvm list               # alias: ls
+
+# Show the currently active version
+pvm current            # alias: cur
 
 # Switch to an installed version
-pvm use 8.3
+pvm use 8.3            # alias: u
 pvm use lts
 
 # Remove an installed version
-pvm remove 8.3
+pvm remove 8.3         # alias: rm
 ```
 
 ## Requirements

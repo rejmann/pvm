@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rejmann/pvm/internal/system"
 	"github.com/rejmann/pvm/internal/version"
-	"github.com/rejmann/pvm/system"
 )
 
 type SystemInstall struct {
