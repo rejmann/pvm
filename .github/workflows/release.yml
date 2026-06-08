@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   version:
-    uses: rejmann/github-actions/.github/workflows/version-tag.yml@main
+    uses: "rejmann/github-actions/.github/workflows/version-tag.yml@main"
 
   build:
     name: Build & Release
