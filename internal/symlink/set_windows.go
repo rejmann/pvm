@@ -132,3 +132,9 @@ func versionBranch(version string) string {
 	}
 	return version
 }
+
+// EnsureShim is a no-op on Windows: the php.bat shim is written by SetCurrent
+// and does not yet resolve .php-version files.
+func EnsureShim(base string) error {
+	return nil
+}
