@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
+  push:
+    branches: [main]
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
