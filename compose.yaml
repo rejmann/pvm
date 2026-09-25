@@ -1,0 +1,20 @@
+services:
+  go:
+    build:
+      context: .
+      target: source
+    user: "${PVM_UID:-1000}:${PVM_GID:-1000}"
+    environment:
+      CGO_ENABLED: "0"
+      GOCACHE: /tmp/go-cache
+    volumes:
+      - ./dist:/src/dist
+
+  pvm:
+    build:
+      context: .
+      target: runtime
+      args:
+        VERSION: ${VERSION:-dev}
+    entrypoint: ["sleep", "infinity"]
+    init: true
