@@ -11,11 +11,6 @@ TARGETS := \
 	darwin/arm64 \
 	windows/amd64
 
-HOST_OS    := $(shell go env GOOS)
-HOST_ARCH  := $(shell go env GOARCH)
-HOST_BIN   := $(DIST)/$(BINARY)-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)
-GO_SOURCES := $(shell find . -name '*.go' -not -name '*_test.go' -not -path './$(DIST)/*') go.mod go.sum
-
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -47,13 +42,12 @@ build-windows: ## Cross-compile for Windows (amd64)
 	@mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-windows-amd64.exe .
 
-$(HOST_BIN): $(GO_SOURCES)
-	@mkdir -p $(DIST)
-	GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(LDFLAGS) -o $@ .
-
 .PHONY: run
-run: $(HOST_BIN) ## Run the dist/ binary for the current OS/arch (e.g. make run ARGS="list")
-	@./$(HOST_BIN) $(ARGS)
+run: ## Run pvm from source (e.g. make run list)
+	go run . $(filter-out run,$(MAKECMDGOALS))
+
+%:
+	@:
 
 .PHONY: test
 test: ## Run tests
