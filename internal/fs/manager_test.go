@@ -109,3 +109,30 @@ func TestRemoveVersionDir(t *testing.T) {
 		t.Errorf("version dir still exists: %v", err)
 	}
 }
+
+func TestMatchInstalled(t *testing.T) {
+	m := NewManager(t.TempDir())
+	for _, v := range []string{"8.2", "8.3.9", "8.3.30", "8.4.1"} {
+		install(t, m, v)
+	}
+
+	tests := []struct {
+		in, want string
+		ok       bool
+	}{
+		{in: "8.2", want: "8.2", ok: true},
+		{in: "8.3", want: "8.3.30", ok: true},
+		{in: "8.3.9", want: "8.3.9", ok: true},
+		{in: "8.4", want: "8.4.1", ok: true},
+		{in: "8.3.1", ok: false},
+		{in: "8.1", ok: false},
+		{in: "lts", ok: false},
+	}
+
+	for _, tt := range tests {
+		got, ok := m.MatchInstalled(tt.in)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("MatchInstalled(%q) = (%q, %v), want (%q, %v)", tt.in, got, ok, tt.want, tt.ok)
+		}
+	}
+}
