@@ -91,6 +91,22 @@ pvm use lts
 pvm remove 8.3         # alias: rm
 ```
 
+## Per-project versions
+
+Pin a version for a project with a `.php-version` file. `php` then switches automatically inside that directory and its subdirectories:
+
+```sh
+cd ~/code/legacy-app
+pvm local 7.4          # writes .php-version
+php -v                 # PHP 7.4.x
+pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
+pvm which              # /usr/bin/php7.4
+
+PVM_VERSION=8.3 php -v # one-off override
+```
+
+`pvm use` without arguments activates the version from `.php-version` globally. Automatic per-directory switching currently works on Linux and macOS. It requires the shim directory in your `PATH` (see below).
+
 ## Requirements
 
 | OS | Requirement |

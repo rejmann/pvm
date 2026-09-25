@@ -96,16 +96,17 @@ Each branch is isolated under the pvm home:
 
 ---
 
-## `pvm use <version|lts>` · alias `u`
+## `pvm use [version|lts]` · alias `u`
 
-Switches the active PHP version.
+Switches the global PHP version.
 
 ```
-pvm use <version|lts>
+pvm use [version|lts]
 
 Arguments:
   version   Full version or branch as recorded by pvm install
   lts       Alias — resolves to the highest currently-supported branch
+  (none)    Uses the version from the nearest .php-version file
 ```
 
 ### Examples
@@ -113,6 +114,7 @@ Arguments:
 ```sh
 pvm use 8.3       # activates 8.3.x (whichever patch was installed)
 pvm use lts       # activates e.g. 8.4
+pvm use           # activates the version in ./.php-version (or a parent directory)
 ```
 
 ### What it does
@@ -128,8 +130,8 @@ pvm use lts       # activates e.g. 8.4
 
 | OS | Mechanism |
 |----|-----------|
-| Linux | `sudo update-alternatives --set php <binary>` + `~/.pvm/bin/php` symlink |
-| macOS | Symlink at `~/.pvm/shims/php` |
+| Linux | `sudo update-alternatives --set php <binary>` + `~/.pvm/bin/php` shim script |
+| macOS | Shim script at `~/.pvm/shims/php` |
 | Windows | Batch shim at `%LOCALAPPDATA%\pvm\shims\php.bat` pointing to the installed `php.exe` |
 
 ### Typical workflow
@@ -192,9 +194,62 @@ Arguments:
 
 ---
 
+## `pvm local [version|lts]`
+
+Pins a PHP version for the current project by writing a `.php-version` file.
+
+```
+pvm local [version|lts] [--unset]
+
+Arguments:
+  version   Installed version or branch to pin (e.g. 8.3)
+  lts       Alias — resolved and written as a concrete branch (e.g. 8.4)
+  (none)    Prints the version from the nearest .php-version
+
+Flags:
+  --unset   Removes .php-version from the current directory
+```
+
+### Examples
+
+```sh
+cd ~/code/legacy-app
+pvm local 7.4     # → PHP 7.4 will be used in ~/code/legacy-app
+php -v            # → PHP 7.4.33 — also in any subdirectory
+cd ~/code/new-app
+php -v            # → global version again
+```
+
+### How the version is chosen
+
+Every `php` call goes through the pvm shim, which picks the first match:
+
+1. `PVM_VERSION` environment variable (e.g. `PVM_VERSION=8.2 php -v`)
+2. The nearest `.php-version`, searching from the current directory up to `/`
+3. The global version set by `pvm use`
+4. The first `php` on `PATH` outside pvm (system PHP)
+
+A version from steps 1–3 that is not installed is an error; pvm never silently falls back to another version.
+
+`.php-version` holds a single version (`8.3` or `8.3.30`). Blank lines and lines starting with `#` are ignored. A branch such as `8.3` matches the highest installed `8.3.x`. The format is the same one used by other PHP version managers, so the file can be committed.
+
+> Per-directory switching works on Linux and macOS. On Windows, `pvm local` writes the file and `pvm current` / `pvm which` honour it, but the `php.bat` shim still uses the global version.
+
+---
+
+## `pvm which`
+
+Prints the path of the PHP binary that `php` would run in the current directory, following the same rules as `pvm local`.
+
+```sh
+pvm which         # → /usr/bin/php8.3
+```
+
+---
+
 ## `pvm current` · alias `cur`
 
-Shows the currently active PHP version as tracked by pvm.
+Shows the PHP version active in the current directory and, when it is not the global one, where it was set.
 
 ```
 pvm current
@@ -204,6 +259,7 @@ pvm current
 
 ```
 Current PHP version: 8.3
+Current PHP version: 7.4 (set by /home/me/code/legacy-app/.php-version)
 ```
 
 If no version is active:
@@ -214,4 +270,4 @@ No PHP version is currently active.
 
 ### What it does
 
-Reads `<pvm-home>/current-version` and prints its contents. The file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.
+Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.
