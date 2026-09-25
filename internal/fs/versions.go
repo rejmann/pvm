@@ -39,3 +39,29 @@ func (m *Manager) InstalledVersions() ([]string, error) {
 	})
 	return versions, nil
 }
+
+// MatchInstalled returns the installed version that satisfies v: an exact
+// match first, otherwise — when v is a bare branch like "8.3" — the highest
+// installed patch of that branch (e.g. "8.3.30").
+func (m *Manager) MatchInstalled(v string) (string, bool) {
+	if m.VersionInstalled(v) {
+		return v, true
+	}
+
+	want, err := version.Parse(v)
+	if err != nil || want.HasPatch() {
+		return "", false
+	}
+
+	installed, err := m.InstalledVersions()
+	if err != nil {
+		return "", false
+	}
+	for i := len(installed) - 1; i >= 0; i-- {
+		got, _ := version.Parse(installed[i])
+		if got.Major == want.Major && got.Minor == want.Minor {
+			return installed[i], true
+		}
+	}
+	return "", false
+}
