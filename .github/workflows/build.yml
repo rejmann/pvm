@@ -50,13 +50,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          MODULE_PATH=$(go list -m)
           OUT_DIR=dist/${{ matrix.goos }}-${{ matrix.goarch }}
           BIN=${{ matrix.bin }}
           mkdir -p "${OUT_DIR}"
 
-          go build -ldflags "-s -w -X \
-            ${MODULE_PATH}/cmd.version=${VERSION}" \
+          go build -ldflags "-s -w -X main.version=${VERSION}" \
             -o "${OUT_DIR}/${BIN}" .
 
           cd "${OUT_DIR}"

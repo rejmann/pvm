@@ -13,11 +13,21 @@ Cross-compile for Windows from Linux/macOS:
 GOOS=windows GOARCH=amd64 go build -o pvm.exe .
 ```
 
+The version shown by `pvm --version` is injected at build time (defaults to `dev`):
+
+```sh
+go build -ldflags "-X main.version=v1.2.3" -o pvm .
+```
+
 ## Running tests
 
 ```sh
 go test ./...
 ```
+
+CI (`.github/workflows/ci.yml`) runs `go vet` and `go test -race` on Linux, macOS and Windows for every pull request.
+
+Tests must not touch the real system: use `t.TempDir()` as the pvm base dir, and inject fake `InstallerFunc` / `RemoverFunc` / `version.Resolver` values. Code paths that call `symlink.SetCurrent` or `symlink.RemoveCurrent` run `sudo update-alternatives` on Linux, so they are intentionally left out of unit tests.
 
 ## Project conventions
 
