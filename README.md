@@ -135,15 +135,16 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 ## Build
 
-```sh
-go build -o pvm .
-```
-
-Cross-compile for Windows from Linux/macOS:
+Requires only `make` and Docker Compose — Go runs inside containers, never on your machine:
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o pvm.exe .
+make setup        # build the Docker images
+make build        # dist/pvm for your OS/arch
+make build-all    # all platforms, e.g. dist/pvm-windows-amd64.exe
+make test
 ```
+
+> **Developing pvm?** Use `make run <command>` — it runs pvm inside a Docker container, never on your machine, so your real pvm and system PHP stay untouched. See [docs/development.md](docs/development.md).
 
 ## Documentation
 
