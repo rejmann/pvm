@@ -2,6 +2,71 @@
 
 `pvm` is a cross-platform CLI tool for installing and managing multiple PHP versions on Linux, macOS, and Windows.
 
+## Installation
+
+The commands below always fetch the **latest** release from [GitHub Releases](https://github.com/rejmann/pvm/releases/latest) — no version number to update. Run the same command again to upgrade.
+
+### Linux (x86_64)
+
+```sh
+curl -fsSL https://github.com/rejmann/pvm/releases/latest/download/pvm-linux-amd64.tar.gz \
+  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+```
+
+### macOS (Apple Silicon)
+
+```sh
+sudo mkdir -p /usr/local/bin
+curl -fsSL https://github.com/rejmann/pvm/releases/latest/download/pvm-darwin-arm64.tar.gz \
+  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+```
+
+### Windows (PowerShell)
+
+Installs `pvm.exe` to `%LOCALAPPDATA%\Programs\pvm` and adds it to your user `PATH` (no admin rights needed):
+
+```powershell
+$dir = "$env:LOCALAPPDATA\Programs\pvm"
+$zip = "$env:TEMP\pvm.zip"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+Invoke-WebRequest -Uri "https://github.com/rejmann/pvm/releases/latest/download/pvm-windows-amd64.zip" -OutFile $zip
+Expand-Archive -Path $zip -DestinationPath $dir -Force
+Remove-Item $zip
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($userPath -notlike "*$dir*") {
+  [Environment]::SetEnvironmentVariable("Path", "$dir;$userPath", "User")
+}
+```
+
+Open a new terminal afterwards so the updated `PATH` is picked up.
+
+### Installing a specific version
+
+Replace `latest/download` with `download/<tag>` in any of the commands above. For example, on Linux:
+
+```sh
+VERSION=v1.0.1
+curl -fsSL "https://github.com/rejmann/pvm/releases/download/${VERSION}/pvm-linux-amd64.tar.gz" \
+  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+```
+
+On Windows, set the URL in the PowerShell snippet to:
+
+```powershell
+$version = "v1.0.1"
+Invoke-WebRequest -Uri "https://github.com/rejmann/pvm/releases/download/$version/pvm-windows-amd64.zip" -OutFile $zip
+```
+
+All available tags are listed on the [releases page](https://github.com/rejmann/pvm/releases).
+
+### Verify
+
+```sh
+pvm --help
+```
+
+> Prebuilt binaries are currently published for Linux x86_64, macOS Apple Silicon and Windows x86_64. On other platforms, see [Build](#build).
+
 ## Quick start
 
 ```sh
