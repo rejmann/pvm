@@ -1,6 +1,6 @@
 # CLI Command Reference
 
-## `pvm available`
+## `pvm available` · alias `a`
 
 Lists all PHP branches available to install from php.net.
 
@@ -40,7 +40,7 @@ On the first run (or with `--refresh`), hits `https://www.php.net/releases/index
 
 ---
 
-## `pvm install <version|lts>`
+## `pvm install <version|lts>` · alias `i`
 
 Installs a PHP version using the appropriate backend for the current OS.
 
@@ -96,7 +96,7 @@ Each branch is isolated under the pvm home:
 
 ---
 
-## `pvm use <version|lts>`
+## `pvm use <version|lts>` · alias `u`
 
 Switches the active PHP version.
 
@@ -143,7 +143,7 @@ pvm use 8.3       # → Now using PHP 8.3.30.
 
 ---
 
-## `pvm list`
+## `pvm list` · alias `ls`
 
 Lists all PHP versions found on the machine.
 
@@ -167,7 +167,7 @@ system:
 
 ---
 
-## `pvm remove <version>`
+## `pvm remove <version>` · alias `rm`
 
 Removes a pvm-managed PHP version.
 
@@ -189,3 +189,29 @@ Arguments:
    ```
 
 > On Windows, `pvm remove` deletes `%LOCALAPPDATA%\pvm\php\<branch>\` entirely.
+
+---
+
+## `pvm current` · alias `cur`
+
+Shows the currently active PHP version as tracked by pvm.
+
+```
+pvm current
+```
+
+### Output
+
+```
+Current PHP version: 8.3
+```
+
+If no version is active:
+
+```
+No PHP version is currently active.
+```
+
+### What it does
+
+Reads `<pvm-home>/current-version` and prints its contents. The file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.

@@ -13,7 +13,7 @@ import (
 type InstallerFunc func(base, ver string) error
 
 var InstallCmd = &cobra.Command{
-	Use:     "install <version|lts>",
+	Use:     "install [i] <version|lts>",
 	Aliases: []string{"i"},
 	Short: "Install a PHP version",
 	Args:  cobra.ExactArgs(1),

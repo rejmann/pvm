@@ -5,7 +5,7 @@ package php
 import (
 	"runtime"
 
-	"github.com/rejmann/pvm/system"
+	"github.com/rejmann/pvm/internal/system"
 )
 
 func platformGlobs() []string {

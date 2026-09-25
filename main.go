@@ -23,6 +23,7 @@ func main() {
 		cmd.ListCmd,
 		cmd.UseCmd,
 		cmd.RemoveCmd,
+		cmd.CurrentCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 
