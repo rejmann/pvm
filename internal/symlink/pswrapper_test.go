@@ -18,6 +18,41 @@ func TestPowerShellWrapperAvoidsPS7OnlySyntax(t *testing.T) {
 	}
 }
 
+func TestRemovePowerShellWrapper(t *testing.T) {
+	tests := []struct {
+		name        string
+		profile     string
+		want        string
+		wantChanged bool
+	}{
+		{name: "no block", profile: "Set-Alias ll ls\n", want: "Set-Alias ll ls\n"},
+		{
+			name:        "block written by upsert",
+			profile:     "before\r\n\n# pvm-wrapper x\r\nbody\r\n# end pvm-wrapper\r\nafter\r\n",
+			want:        "before\r\nafter\r\n",
+			wantChanged: true,
+		},
+		{
+			name:        "only the block",
+			profile:     "\n# pvm-wrapper x\n# end pvm-wrapper\n",
+			want:        "",
+			wantChanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, changed := removePowerShellWrapper(tt.profile)
+			if got != tt.want {
+				t.Errorf("removePowerShellWrapper =\n%q\nwant\n%q", got, tt.want)
+			}
+			if changed != tt.wantChanged {
+				t.Errorf("changed = %v, want %v", changed, tt.wantChanged)
+			}
+		})
+	}
+}
+
 func TestUpsertPowerShellWrapper(t *testing.T) {
 	const wrapper = "# pvm-wrapper new\n# end pvm-wrapper\n"
 

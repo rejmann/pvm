@@ -93,6 +93,9 @@ pvm remove 8.3         # alias: rm
 
 # Upgrade pvm itself to the latest release
 pvm self-upgrade
+
+# Uninstall pvm
+pvm self-remove
 ```
 
 ## Per-project versions
@@ -139,7 +142,16 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 ## Uninstall
 
-First, optionally remove the PHP versions installed through pvm. On Linux and macOS they are system/Homebrew packages, so they stay installed if you skip this step:
+```sh
+pvm self-remove        # asks before removing anything
+pvm self-remove --php  # also remove the PHP versions installed through pvm
+```
+
+It removes the pvm binary and its data directory and, on Windows, the pvm entries in the user `PATH` and the PowerShell profile. On Windows the PHP versions live in the data directory and are always removed; on Linux and macOS they are system/Homebrew packages and are kept unless you pass `--php`. Run it without `sudo` — if the binary is in a root-owned directory, it prints the `sudo rm` command to finish. See [docs/commands.md](docs/commands.md#pvm-self-remove) for details.
+
+### Manual uninstall
+
+For pvm versions without `self-remove`. First, optionally remove the PHP versions installed through pvm (on Linux and macOS they stay installed otherwise):
 
 ```sh
 pvm list
@@ -148,7 +160,7 @@ pvm remove 8.3         # repeat for each version
 
 The paths below assume the default data directory; if you set `PVM_HOME`, remove that directory instead.
 
-### Linux / macOS
+#### Linux / macOS
 
 ```sh
 sudo rm -f /usr/local/bin/pvm
@@ -157,7 +169,7 @@ rm -rf ~/.pvm
 
 Then delete the `export PATH="$HOME/.pvm/..."` line from `~/.bashrc` / `~/.zshrc` and open a new terminal.
 
-### Windows (PowerShell)
+#### Windows (PowerShell)
 
 ```powershell
 $bin  = "$env:LOCALAPPDATA\Programs\pvm"

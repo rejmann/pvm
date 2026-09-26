@@ -16,6 +16,7 @@ pvm/
 │   ├── run.go                   # `pvm run` — run a PHP file with a specific version
 │   ├── shim.go                  # hidden `pvm shim php` — entry point of the php shim
 │   ├── self_upgrade.go          # `pvm self-upgrade` — replaces pvm with a GitHub release
+│   ├── self_remove.go           # `pvm self-remove` — uninstalls pvm
 │   ├── active.go                # resolveActive(): PVM_VERSION → .php-version → global
 │   ├── exec_unix.go             # execBinary() via syscall.Exec
 │   ├── exec_windows.go          # execBinary() via child process + exit code
@@ -48,13 +49,15 @@ pvm/
     │   ├── get.go               # GetCurrent() — reads current-version file
     │   ├── set.go               # SetCurrent() / RemoveCurrent() dispatcher
     │   ├── set_unix.go          # Unix: symlinks + update-alternatives (Linux)
-    │   ├── set_windows.go       # Windows: batch shim
+    │   ├── set_windows.go       # Windows: batch shim, user PATH, PowerShell profile wrapper
+    │   ├── pswrapper.go         # Builds/replaces/removes the PowerShell profile wrapper block
     │   ├── shim.go              # ShimDir(): ~/.pvm/bin (Linux) or shims/ (others)
     │   └── shim_unix.go         # EnsureShim(): writes the php shim script
     ├── project/
     │   └── project.go           # Find/Read .php-version
     ├── selfupdate/
-    │   └── selfupdate.go        # Latest release tag, archive download/extraction, binary swap
+    │   ├── selfupdate.go        # Latest release tag, archive download/extraction, binary swap
+    │   └── remove_*.go          # RemoveBinary(): deletes the running pvm binary (per OS)
     ├── system/
     │   └── system.go            # OS constants (Linux, Darwin, Windows)
     └── version/
@@ -214,6 +217,18 @@ cmd.runSelfUpgrade
   ├─ same as the build version (main.version) → "already at <tag>"
   ├─ selfupdate.Download → pvm-<os>-<arch>.tar.gz|.zip → pvm binary bytes
   └─ selfupdate.Replace → temp file in the same dir → rename over the binary
+```
+
+## Data flow — `pvm self-remove`
+
+```
+cmd.runSelfRemove
+  ├─ checkRemovableBase → refuse home/root as data dir
+  ├─ list binary, data dir, installed versions → confirm (unless --yes)
+  ├─ --php → installer.Remove for each installed version
+  ├─ symlink.RemoveIntegration → Windows: user PATH + PowerShell profile (no-op on Unix)
+  ├─ os.RemoveAll(data dir)
+  └─ selfupdate.RemoveBinary → Unix: os.Remove · Windows: rename + detached cmd.exe deletes it after exit
 ```
 
 ## Key design decisions

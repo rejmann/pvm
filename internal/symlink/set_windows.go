@@ -3,6 +3,7 @@
 package symlink
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -63,14 +64,8 @@ func installPowerShellWrapper(shimDir string) {
 		return
 	}
 
-	profileOut, err := exec.Command(
-		"powershell", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE",
-	).Output()
+	profilePath, err := powerShellProfilePath()
 	if err != nil {
-		return
-	}
-	profilePath := strings.TrimSpace(string(profileOut))
-	if profilePath == "" {
 		return
 	}
 
@@ -82,6 +77,67 @@ func installPowerShellWrapper(shimDir string) {
 
 	_ = os.MkdirAll(filepath.Dir(profilePath), 0755)
 	_ = os.WriteFile(profilePath, []byte(updated), 0644)
+}
+
+// RemoveIntegration undoes what pvm set up outside its data directory: the
+// shim directory and binDir entries in the user PATH, and the wrapper in the
+// PowerShell profile.
+func RemoveIntegration(base, binDir string) error {
+	if err := removeFromUserPath(ShimDir(base), binDir); err != nil {
+		return fmt.Errorf("update user PATH: %w", err)
+	}
+
+	profilePath, err := powerShellProfilePath()
+	if err != nil {
+		return fmt.Errorf("locate PowerShell profile: %w", err)
+	}
+	existing, err := os.ReadFile(profilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read PowerShell profile: %w", err)
+	}
+	updated, changed := removePowerShellWrapper(string(existing))
+	if !changed {
+		return nil
+	}
+	if err := os.WriteFile(profilePath, []byte(updated), 0644); err != nil {
+		return fmt.Errorf("write PowerShell profile: %w", err)
+	}
+	return nil
+}
+
+// powerShellProfilePath returns $PROFILE of Windows PowerShell.
+func powerShellProfilePath() (string, error) {
+	out, err := exec.Command(
+		"powershell", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE",
+	).Output()
+	if err != nil {
+		return "", err
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return "", errors.New("$PROFILE is empty")
+	}
+	return p, nil
+}
+
+// removeFromUserPath drops dirs from the current user PATH in the Windows
+// registry.
+func removeFromUserPath(dirs ...string) error {
+	quoted := make([]string, len(dirs))
+	for i, d := range dirs {
+		quoted[i] = "'" + psSingleQuote(d) + "'"
+	}
+	script := fmt.Sprintf(`
+$dirs = @(%s)
+$current = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+$parts = @($current -split ';' | Where-Object { $_ -and $dirs -notcontains $_.TrimEnd('\') })
+[System.Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User')
+`, strings.Join(quoted, ", "))
+
+	return exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script).Run()
 }
 
 // prependToUserPath adds dir to the front of the current user PATH in the

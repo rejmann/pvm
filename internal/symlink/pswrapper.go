@@ -38,15 +38,39 @@ Set-Alias -Name pvm -Value Invoke-PVM -Force
 // wrapper, replacing an existing block (e.g. one written by an older pvm) or
 // appending a new one. changed is false when the profile is already current.
 func upsertPowerShellWrapper(profile, wrapper string) (updated string, changed bool) {
-	start := strings.Index(profile, psWrapperStart)
-	if start == -1 {
+	start, end, ok := findPowerShellWrapper(profile)
+	if !ok {
 		return profile + "\n" + wrapper, true
 	}
 
-	end := strings.Index(profile[start:], psWrapperEnd)
+	updated = profile[:start] + wrapper + profile[end:]
+	return updated, updated != profile
+}
+
+// removePowerShellWrapper returns profile without the pvm wrapper block and
+// the blank line written before it. changed is false when there is no block.
+func removePowerShellWrapper(profile string) (updated string, changed bool) {
+	start, end, ok := findPowerShellWrapper(profile)
+	if !ok {
+		return profile, false
+	}
+	if start > 0 && profile[start-1] == '\n' {
+		start--
+	}
+	return profile[:start] + profile[end:], true
+}
+
+// findPowerShellWrapper locates the wrapper block in profile, including the
+// line break after its end marker. An unterminated block runs to the end.
+func findPowerShellWrapper(profile string) (start, end int, ok bool) {
+	start = strings.Index(profile, psWrapperStart)
+	if start == -1 {
+		return 0, 0, false
+	}
+
+	end = strings.Index(profile[start:], psWrapperEnd)
 	if end == -1 {
-		// unterminated block: drop everything from the start marker on
-		return profile[:start] + wrapper, true
+		return start, len(profile), true
 	}
 	end += start + len(psWrapperEnd)
 	if end < len(profile) && profile[end] == '\r' {
@@ -55,9 +79,7 @@ func upsertPowerShellWrapper(profile, wrapper string) (updated string, changed b
 	if end < len(profile) && profile[end] == '\n' {
 		end++
 	}
-
-	updated = profile[:start] + wrapper + profile[end:]
-	return updated, updated != profile
+	return start, end, true
 }
 
 // psSingleQuote escapes s for use inside a single-quoted PowerShell string.
