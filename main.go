@@ -27,7 +27,6 @@ func main() {
 		cmd.UseCmd,
 		cmd.RemoveCmd,
 		cmd.CurrentCmd,
-		cmd.LocalCmd,
 		cmd.WhichCmd,
 		cmd.RunCmd,
 		cmd.ShimCmd,

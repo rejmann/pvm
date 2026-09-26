@@ -49,3 +49,10 @@ func fakeInstall(t *testing.T, m *phpfs.Manager, v string) {
 		t.Fatal(err)
 	}
 }
+
+func mkdirAll(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
