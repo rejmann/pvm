@@ -29,6 +29,7 @@ func main() {
 		cmd.CurrentCmd,
 		cmd.LocalCmd,
 		cmd.WhichCmd,
+		cmd.ExecCmd,
 		cmd.ShimCmd,
 	}
 	rootCmd.AddCommand(cmds...)
