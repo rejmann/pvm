@@ -26,13 +26,23 @@ make run install 8.5
 make run use 8.5
 make run list
 make run -- -v        # pvm flags need `--`, otherwise make parses them
+make run exec 8.5 teste.php
+make run -- exec teste.php -v 8.2   # flags after `run` need `--`
 make shell            # then: php -v → PHP 8.5.x
 make down             # back to a clean container
 ```
 
-`make run` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions, the active version and `.php-version` files persist until `make down`. Nothing is shared with the host.
+`make run` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions and the active version persist until `make down`. The project is mounted read-only at `/app` (the working directory), so PHP can run files from the repo — `make run exec 8.5 teste.php` — but nothing in the container can change them (`pvm local` there fails with "read-only file system"). Flags after `run` need `--` or `ARGS`, since make would parse them itself: `make run -- exec 8.5 --file teste.php`.
 
-If the code changed, the next `make run` rebuilds the image and recreates the container with the new pvm, which also starts from a clean state.
+Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted into the container), so after `make down` the next `pvm install` of the same version doesn't download anything again. The files there are created by root inside the container; remove them with `sudo rm -rf .local` if you need to clear the cache.
+
+`make run` receives its arguments as make goals, so quotes and spaces are lost. For arguments like that, pass them in `ARGS`, which the shell parses normally:
+
+```sh
+make run ARGS="exec 8.5 teste.php 'um argumento com espaços'"
+```
+
+pvm itself is not baked into the image: `make run` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
 
 No Makefile target may touch the pvm installed on your machine: `make test` and `make lint` only compile and test code (tests use `t.TempDir()`), and the `build*` targets only write to `dist/`.
 

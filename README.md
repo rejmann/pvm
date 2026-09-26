@@ -103,6 +103,7 @@ pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php
 pvm which              # /usr/bin/php7.4
 
 PVM_VERSION=8.3 php -v # one-off override
+pvm exec 8.2 script.php # run a script with a specific version
 ```
 
 `pvm use` without arguments activates the version from `.php-version` globally. Automatic per-directory switching currently works on Linux and macOS. It requires the shim directory in your `PATH` (see below).

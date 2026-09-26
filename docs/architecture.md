@@ -14,6 +14,7 @@ pvm/
 │   ├── remove.go                # `pvm remove` command
 │   ├── local.go                 # `pvm local` command (.php-version)
 │   ├── which.go                 # `pvm which` command
+│   ├── exec.go                  # `pvm exec` — run a PHP file with a specific version
 │   ├── shim.go                  # hidden `pvm shim php` — entry point of the php shim
 │   ├── active.go                # resolveActive(): PVM_VERSION → .php-version → global
 │   ├── exec_unix.go             # execBinary() via syscall.Exec

@@ -247,6 +247,48 @@ pvm which         # → /usr/bin/php8.3
 
 ---
 
+## `pvm exec [-v version | version] <file> [args...]`
+
+Runs a PHP file with a specific installed version, without changing the global or project version.
+
+```
+pvm exec [version|lts] <file> [args...]
+pvm exec [version|lts] -f|--file <file> [args...]
+pvm exec -v|--version <version|lts> <file> [args...]
+
+Arguments:
+  version    Installed version or branch (e.g. 8.2 matches the highest installed 8.2.x),
+             given first or with -v/--version (also --version=8.2); it must be installed
+  lts        Alias — resolves to the highest currently-supported branch
+  (none)     Uses the version in use: PVM_VERSION → nearest .php-version → global
+  file       PHP file to run — required; it must exist
+  args       Passed to the script unchanged
+```
+
+A file is mandatory: `pvm exec`, `pvm exec 8.5`, `pvm exec -v` or `pvm exec 8.5 -r '...'` fail with `no PHP file given`, and a missing file or a directory fails before php starts. The first argument is taken as the version only if it looks like one (`8.5`, `8.2.30`, `lts`). `-v`/`--version` works anywhere (`pvm exec script.php -v 8.2`); giving the version twice is an error. Arguments after `--` go to the script untouched, so use it when the script has its own `-v`: `pvm exec script.php -- -v 8.2`.
+
+### Examples
+
+```sh
+pvm exec 8.5 script.php --input data.txt
+pvm exec 8.2 --file script.php
+pvm exec --version 8.2 script.php
+pvm exec -v lts script.php
+pvm exec script.php -v 8.2
+pvm exec script.php -- -v   # -v goes to the script
+pvm exec 8.2 vendor/bin/phpunit
+pvm exec script.php       # version in use in this directory
+```
+
+### What it does
+
+1. Checks that a PHP file was given and exists.
+2. Resolves the version like `pvm use` (alias, branch → installed patch), or — without one — like the `php` shim; fails if it is not installed.
+3. Sets `PVM_VERSION=<version>` for the new process, so anything it starts that calls `php` through the pvm shim (Composer, `#!/usr/bin/env php` scripts, `shell_exec("php ...")`) uses the same version.
+4. Replaces itself with the php binary (Windows: runs it as a child), so stdin, stdout, signals and the exit code are php's own.
+
+---
+
 ## `pvm current` · alias `cur`
 
 Shows the PHP version active in the current directory and, when it is not the global one, where it was set.
