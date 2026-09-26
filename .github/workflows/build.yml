@@ -24,6 +24,14 @@ jobs:
             goarch: amd64
             bin: pvm
             archive_ext: .tar.gz
+          - goos: linux
+            goarch: arm64
+            bin: pvm
+            archive_ext: .tar.gz
+          - goos: darwin
+            goarch: amd64
+            bin: pvm
+            archive_ext: .tar.gz
           - goos: darwin
             goarch: arm64
             bin: pvm

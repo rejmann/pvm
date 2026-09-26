@@ -4,7 +4,7 @@
 
 ## Installation
 
-The commands below always fetch the **latest** release from [GitHub Releases](https://github.com/rejmann/pvm/releases/latest) — no version number to update. Run the same command again to upgrade.
+The commands below always fetch the **latest** release from [GitHub Releases](https://github.com/rejmann/pvm/releases/latest) — no version number to update. Once installed, upgrade with `pvm self-upgrade` (prefix with `sudo` if pvm is in a root-owned directory such as `/usr/local/bin`).
 
 ### Linux (x86_64)
 
@@ -65,7 +65,7 @@ All available tags are listed on the [releases page](https://github.com/rejmann/
 pvm --help
 ```
 
-> Prebuilt binaries are currently published for Linux x86_64, macOS Apple Silicon and Windows x86_64. On other platforms, see [Build](#build).
+> Prebuilt binaries are published for Linux (x86_64, arm64), macOS (Apple Silicon, Intel) and Windows x86_64 — on Linux arm64 or an Intel Mac, swap `amd64`/`arm64` in the archive name (`pvm-linux-arm64.tar.gz`, `pvm-darwin-amd64.tar.gz`). On other platforms, see [Build](#build).
 
 ## Quick start
 
@@ -89,6 +89,9 @@ pvm use lts
 
 # Remove an installed version
 pvm remove 8.3         # alias: rm
+
+# Upgrade pvm itself to the latest release
+pvm self-upgrade
 ```
 
 ## Per-project versions

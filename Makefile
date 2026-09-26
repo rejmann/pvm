@@ -70,13 +70,17 @@ up: setup $(PVM_BIN) ## Start the pvm container in background (state persists un
 down: ## Stop and remove the pvm container (resets installed PHP versions)
 	@$(COMPOSE) down
 
+# The container runs a writable copy of the build (so `pvm self-upgrade` works), refreshed
+# only when the build is newer: an upgraded binary sticks until the code changes.
+SYNC_PVM := cp -u /app/$(PVM_BIN) /usr/local/bin/$(BINARY)
+
 .PHONY: pvm
 pvm: up ## Run pvm in the running container (e.g. make pvm install 8.5, or ARGS="..." to keep quotes)
-	@$(COMPOSE) exec app-pvm pvm $(PVM_ARGS) $(ARGS)
+	@$(COMPOSE) exec app-pvm sh -c '$(SYNC_PVM) && exec pvm "$$@"' pvm $(PVM_ARGS) $(ARGS)
 
 .PHONY: shell
 shell: up ## Open a bash shell in the pvm container
-	@$(COMPOSE) exec app-pvm bash
+	@$(COMPOSE) exec app-pvm sh -c '$(SYNC_PVM) && exec bash'
 
 # `make pvm run 8.5 teste.php`: words after `pvm` are pvm arguments, not make targets.
 ifeq (pvm,$(firstword $(MAKECMDGOALS)))
