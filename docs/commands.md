@@ -196,11 +196,10 @@ Arguments:
 
 ## Per-project versions (`.php-version`)
 
-Pin a PHP version for a project by committing a `.php-version` file at its root. `php` then switches automatically inside that directory and its subdirectories.
+If a project has a `.php-version` file, `php` switches automatically to that version inside the project directory and its subdirectories. pvm only reads this file; it never creates it.
 
 ```sh
-cd ~/code/legacy-app
-echo 7.4 > .php-version
+cd ~/code/legacy-app  # contains .php-version with 7.4
 php -v            # → PHP 7.4.33 — also in any subdirectory
 cd ~/code/new-app
 php -v            # → global version again

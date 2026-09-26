@@ -96,11 +96,10 @@ pvm self-upgrade
 
 ## Per-project versions
 
-Pin a version for a project with a `.php-version` file. `php` then switches automatically inside that directory and its subdirectories:
+If a project has a `.php-version` file, `php` switches automatically to that version inside the project directory and its subdirectories:
 
 ```sh
-cd ~/code/legacy-app
-echo 7.4 > .php-version
+cd ~/code/legacy-app   # contains .php-version with 7.4
 php -v                 # PHP 7.4.x
 pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
 pvm which              # /usr/bin/php7.4
