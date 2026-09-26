@@ -9,20 +9,14 @@ COPY main.go ./
 COPY cmd ./cmd
 COPY internal ./internal
 
-FROM source AS builder
-
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o /pvm .
-
 FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
      sudo ca-certificates software-properties-common gpg-agent \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm /etc/apt/apt.conf.d/docker-clean
 
-COPY --from=builder /pvm /usr/local/bin/pvm
-
-ENV PATH=/root/.pvm/bin:$PATH
-
-ENTRYPOINT ["pvm"]
+# pvm itself is not in the image: it is built into .local/bin, which the container
+# sees through the project mount, so code changes don't recreate the container.
+ENV PATH=/root/.pvm/bin:/app/.local/bin:$PATH
