@@ -32,7 +32,7 @@ make shell            # then: php -v → PHP 8.5.x
 make down             # back to a clean container
 ```
 
-`make pvm` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions and the active version persist until `make down`. The project is mounted read-only at `/app` (the working directory), so PHP can run files from the repo — `make pvm run 8.5 teste.php` — but nothing in the container can change them (`pvm local` there fails with "read-only file system").
+`make pvm` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions and the active version persist until `make down`. The project is mounted read-only at `/app` (the working directory), so PHP can run files from the repo — `make pvm run 8.5 teste.php` — but nothing in the container can change them (writing a `.php-version` there fails with "read-only file system").
 
 The container runs a copy of the build at `/usr/local/bin/pvm`, which `make pvm` / `make shell` refresh with `cp -u` — only when `.local/bin/pvm` is newer. That lets `make pvm self-upgrade` replace it with a real release: the upgraded binary stays in use until you change the code (the rebuild is newer, so it is copied back) or run `make down`. Flags after `pvm` need `--` or `ARGS`, since make would parse them itself: `make pvm -- run 8.5 --file teste.php`.
 
@@ -57,7 +57,7 @@ make build-all    # dist/pvm-linux-amd64, pvm-darwin-arm64, pvm-windows-amd64.ex
 
 Binaries are compiled by the `go` service, which mounts `./dist` as a volume and runs as your user, so files in `dist/` are owned by you. The version shown by `pvm --version` comes from `git describe` (defaults to `dev`).
 
-Do not run a `dist/` binary on your machine for commands that change state (`install`, `use`, `remove`, `local`) — use `make pvm` instead (see above).
+Do not run a `dist/` binary on your machine for commands that change state (`install`, `use`, `remove`) — use `make pvm` instead (see above).
 
 For a one-off Go command that writes to the repo (e.g. `go mod tidy`), run the Go image with the repo mounted instead of a local toolchain:
 

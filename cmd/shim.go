@@ -55,7 +55,7 @@ func shimTarget(m *phpfs.Manager, dir, env, path string) (string, error) {
 	if bin := lookPathExcluding("php", path, symlink.ShimDir(m.Base)); bin != "" {
 		return bin, nil
 	}
-	return "", fmt.Errorf("%w and no system php found — run: pvm use <version> or pvm local <version>", err)
+	return "", fmt.Errorf("%w and no system php found — run: pvm use <version>", err)
 }
 
 // lookPathExcluding is exec.LookPath restricted to PATH entries other than skip.

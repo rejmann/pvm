@@ -28,7 +28,7 @@ func runWhich(cmd *cobra.Command, args []string) error {
 func printWhich(m *phpfs.Manager, dir, env string, out io.Writer) error {
 	a, err := resolveActive(m, dir, env)
 	if errors.Is(err, ErrNoActiveVersion) {
-		return fmt.Errorf("%w — run: pvm use <version> or pvm local <version>", err)
+		return fmt.Errorf("%w — run: pvm use <version>", err)
 	}
 	if err != nil {
 		return err

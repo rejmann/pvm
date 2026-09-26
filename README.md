@@ -100,7 +100,7 @@ Pin a version for a project with a `.php-version` file. `php` then switches auto
 
 ```sh
 cd ~/code/legacy-app
-pvm local 7.4          # writes .php-version
+echo 7.4 > .php-version
 php -v                 # PHP 7.4.x
 pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
 pvm which              # /usr/bin/php7.4

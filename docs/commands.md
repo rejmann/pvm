@@ -194,27 +194,13 @@ Arguments:
 
 ---
 
-## `pvm local [version|lts]`
+## Per-project versions (`.php-version`)
 
-Pins a PHP version for the current project by writing a `.php-version` file.
-
-```
-pvm local [version|lts] [--unset]
-
-Arguments:
-  version   Installed version or branch to pin (e.g. 8.3)
-  lts       Alias — resolved and written as a concrete branch (e.g. 8.4)
-  (none)    Prints the version from the nearest .php-version
-
-Flags:
-  --unset   Removes .php-version from the current directory
-```
-
-### Examples
+Pin a PHP version for a project by committing a `.php-version` file at its root. `php` then switches automatically inside that directory and its subdirectories.
 
 ```sh
 cd ~/code/legacy-app
-pvm local 7.4     # → PHP 7.4 will be used in ~/code/legacy-app
+echo 7.4 > .php-version
 php -v            # → PHP 7.4.33 — also in any subdirectory
 cd ~/code/new-app
 php -v            # → global version again
@@ -233,13 +219,13 @@ A version from steps 1–3 that is not installed is an error; pvm never silently
 
 `.php-version` holds a single version (`8.3` or `8.3.30`). Blank lines and lines starting with `#` are ignored. A branch such as `8.3` matches the highest installed `8.3.x`. The format is the same one used by other PHP version managers, so the file can be committed.
 
-> Per-directory switching works on Linux and macOS. On Windows, `pvm local` writes the file and `pvm current` / `pvm which` honour it, but the `php.bat` shim still uses the global version.
+> Per-directory switching works on Linux and macOS. On Windows, `pvm current` / `pvm which` honour `.php-version`, but the `php.bat` shim still uses the global version.
 
 ---
 
 ## `pvm which`
 
-Prints the path of the PHP binary that `php` would run in the current directory, following the same rules as `pvm local`.
+Prints the path of the PHP binary that `php` would run in the current directory, following the rules in [How the version is chosen](#how-the-version-is-chosen).
 
 ```sh
 pvm which         # → /usr/bin/php8.3

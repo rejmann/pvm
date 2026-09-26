@@ -59,28 +59,6 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestWriteAndRemove(t *testing.T) {
-	dir := t.TempDir()
-
-	p, err := Write(dir, "8.4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, err := Read(p); err != nil || got != "8.4" {
-		t.Fatalf("Read after Write = (%q, %v)", got, err)
-	}
-
-	if _, err := Remove(dir); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(p); !os.IsNotExist(err) {
-		t.Errorf("file should be gone, stat err = %v", err)
-	}
-	if _, err := Remove(dir); err != nil {
-		t.Errorf("Remove on missing file = %v, want nil", err)
-	}
-}
-
 func write(t *testing.T, dir, content string) string {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0755); err != nil {

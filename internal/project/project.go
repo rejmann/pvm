@@ -1,4 +1,4 @@
-// Package project reads and writes the per-project .php-version file.
+// Package project reads the per-project .php-version file.
 package project
 
 import (
@@ -60,22 +60,4 @@ func Read(path string) (string, error) {
 		return "", fmt.Errorf("read %s: %w", path, err)
 	}
 	return "", fmt.Errorf("%s is empty", path)
-}
-
-// Write creates or replaces the .php-version file in dir.
-func Write(dir, version string) (string, error) {
-	p := filepath.Join(dir, FileName)
-	if err := os.WriteFile(p, []byte(version+"\n"), 0644); err != nil {
-		return "", fmt.Errorf("write %s: %w", p, err)
-	}
-	return p, nil
-}
-
-// Remove deletes the .php-version file in dir. It is a no-op if none exists.
-func Remove(dir string) (string, error) {
-	p := filepath.Join(dir, FileName)
-	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("remove %s: %w", p, err)
-	}
-	return p, nil
 }
