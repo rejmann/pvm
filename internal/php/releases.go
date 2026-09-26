@@ -58,7 +58,15 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 		return nil, fmt.Errorf("no PHP releases found")
 	}
 
+	sortBranches(all)
 	return all, nil
+}
+
+// sortBranches orders branches newest to oldest (8.10, …, 8.0, 7.4, …, 5.0).
+func sortBranches(branches []Branch) {
+	sort.Slice(branches, func(i, j int) bool {
+		return branchKey(branches[i].Name) > branchKey(branches[j].Name)
+	})
 }
 
 type Major struct {
@@ -148,9 +156,7 @@ func fetchReleases(ctx context.Context) ([]Release, error) {
 		return nil, fmt.Errorf("no supported PHP releases found")
 	}
 
-	sort.Slice(supported, func(i, j int) bool {
-		return branchKey(supported[i].Name) < branchKey(supported[j].Name)
-	})
+	sortBranches(supported)
 	return supported, nil
 }
 
@@ -181,5 +187,5 @@ func LatestLTS(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return releases[len(releases)-1].Name, nil
+	return releases[0].Name, nil
 }

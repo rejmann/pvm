@@ -35,6 +35,22 @@ func TestCacheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestReadCacheSortsUnorderedCache(t *testing.T) {
+	dir := t.TempDir()
+	writeRawCache(t, dir, branchCache{
+		CachedAt: time.Now(),
+		Branches: []Branch{sampleBranches[1], sampleBranches[0]},
+	})
+
+	got, ok := readCache(dir)
+	if !ok {
+		t.Fatal("readCache should hit a fresh cache")
+	}
+	if !reflect.DeepEqual(got, sampleBranches) {
+		t.Errorf("readCache = %+v, want %+v", got, sampleBranches)
+	}
+}
+
 func TestCacheExpired(t *testing.T) {
 	dir := t.TempDir()
 	writeRawCache(t, dir, branchCache{

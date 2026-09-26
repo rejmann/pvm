@@ -31,6 +31,8 @@ func readCache(cacheDir string) ([]Branch, bool) {
 	if time.Since(c.CachedAt) > cacheTTL {
 		return nil, false
 	}
+	// Caches written before branches were sorted keep a random order.
+	sortBranches(c.Branches)
 	return c.Branches, true
 }
 
