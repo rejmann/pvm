@@ -68,6 +68,20 @@ func TestBranchKeyOrdering(t *testing.T) {
 	}
 }
 
+func TestSortBranches(t *testing.T) {
+	branches := []Branch{{Name: "8.3"}, {Name: "5.6"}, {Name: "8.10"}, {Name: "7.4"}, {Name: "8.0"}}
+	sortBranches(branches)
+
+	var got []string
+	for _, b := range branches {
+		got = append(got, b.Name)
+	}
+	want := []string{"8.10", "8.3", "8.0", "7.4", "5.6"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sortBranches = %v, want %v", got, want)
+	}
+}
+
 func TestStatusString(t *testing.T) {
 	if StatusSupported.String() != "supported" || StatusEOL.String() != "eol" {
 		t.Errorf("Status.String: got %q / %q", StatusSupported, StatusEOL)
