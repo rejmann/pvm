@@ -16,6 +16,7 @@ pvm/
 │   ├── which.go                 # `pvm which` command
 │   ├── run.go                   # `pvm run` — run a PHP file with a specific version
 │   ├── shim.go                  # hidden `pvm shim php` — entry point of the php shim
+│   ├── self_upgrade.go          # `pvm self-upgrade` — replaces pvm with a GitHub release
 │   ├── active.go                # resolveActive(): PVM_VERSION → .php-version → global
 │   ├── exec_unix.go             # execBinary() via syscall.Exec
 │   ├── exec_windows.go          # execBinary() via child process + exit code
@@ -53,6 +54,8 @@ pvm/
     │   └── shim_unix.go         # EnsureShim(): writes the php shim script
     ├── project/
     │   └── project.go           # Find/Read/Write/Remove .php-version
+    ├── selfupdate/
+    │   └── selfupdate.go        # Latest release tag, archive download/extraction, binary swap
     ├── system/
     │   └── system.go            # OS constants (Linux, Darwin, Windows)
     └── version/
@@ -201,6 +204,17 @@ cmd.runCurrent / cmd.runWhich
   └─ cmd.resolveActive(base, cwd, $PVM_VERSION)
        ├─ found → print version (+ source) or binary path
        └─ ErrNoActiveVersion → "No PHP version is currently active."
+```
+
+## Data flow — `pvm self-upgrade [tag]`
+
+```
+cmd.runSelfUpgrade
+  ├─ os.Executable + EvalSymlinks → path of the running binary
+  ├─ selfupdate.LatestTag (GitHub API /releases/latest) — unless a tag was given
+  ├─ same as the build version (main.version) → "already at <tag>"
+  ├─ selfupdate.Download → pvm-<os>-<arch>.tar.gz|.zip → pvm binary bytes
+  └─ selfupdate.Replace → temp file in the same dir → rename over the binary
 ```
 
 ## Key design decisions

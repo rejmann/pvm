@@ -313,3 +313,38 @@ No PHP version is currently active.
 ### What it does
 
 Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.
+
+---
+
+## `pvm self-upgrade [tag]`
+
+Upgrades pvm itself by downloading a release from [GitHub Releases](https://github.com/rejmann/pvm/releases) and replacing the running binary.
+
+```
+pvm self-upgrade [tag] [--check]
+
+Arguments:
+  tag         Release to install (e.g. v1.2.0 or 1.2.0) — also allows downgrading
+  (none)      Installs the latest release
+
+Flags:
+  -c, --check   Only report whether a newer release is available
+```
+
+### Examples
+
+```sh
+pvm self-upgrade           # latest release
+pvm self-upgrade --check   # pvm v1.2.0 is available (current: v1.1.0). Run: pvm self-upgrade
+pvm self-upgrade v1.1.0    # a specific release
+sudo pvm self-upgrade      # when pvm lives in a root-owned directory such as /usr/local/bin
+```
+
+### What it does
+
+1. Resolves the target tag — the given one, or the latest release from the GitHub API.
+2. Stops if the running version already is that tag.
+3. Downloads `pvm-<os>-<arch>.tar.gz` (Windows: `.zip`) for that tag and extracts the `pvm` binary.
+4. Writes it next to the running binary (symlinks resolved) and renames it over the old one, so a failed upgrade never leaves a broken binary. On Windows the running `pvm.exe` is first moved to `pvm.exe.old`, which the next upgrade removes.
+
+If the directory is not writable, it fails with `permission denied` and suggests re-running with `sudo`. On Windows the hint is to run it from a terminal opened as Administrator. Every published platform can self-upgrade: Linux (amd64, arm64), macOS (amd64, arm64) and Windows amd64; releases published before a platform was added fail with `has no build for <os>/<arch>`.

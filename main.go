@@ -31,9 +31,11 @@ func main() {
 		cmd.WhichCmd,
 		cmd.RunCmd,
 		cmd.ShimCmd,
+		cmd.SelfUpgradeCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 	rootCmd.Version = version
+	cmd.Version = version
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

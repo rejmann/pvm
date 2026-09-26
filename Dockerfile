@@ -18,5 +18,7 @@ RUN apt-get update \
     && rm /etc/apt/apt.conf.d/docker-clean
 
 # pvm itself is not in the image: it is built into .local/bin, which the container
-# sees through the project mount, so code changes don't recreate the container.
-ENV PATH=/root/.pvm/bin:/app/.local/bin:$PATH
+# sees through the (read-only) project mount, so code changes don't recreate the
+# container. `make pvm` / `make shell` copy it to /usr/local/bin, a writable
+# location, so `pvm self-upgrade` can replace it.
+ENV PATH=/root/.pvm/bin:$PATH
