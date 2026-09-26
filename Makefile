@@ -30,7 +30,7 @@ help: ## show this help
 
 .PHONY: setup
 setup: ## Build the Docker images (run after changing code or go.mod)
-	@mkdir -p $(DIST)
+	@mkdir -p $(DIST) .local/bin .local/apt/archives
 	@$(COMPOSE) build
 
 .PHONY: build
@@ -56,6 +56,8 @@ build-windows: setup ## Cross-compile for Windows (amd64)
 
 .PHONY: up
 up: setup ## Start the pvm container in background (state persists until `make down`)
+	@$(COMPOSE) run --rm -e GOOS=linux -e GOARCH=$(HOST_ARCH) go \
+		go build -ldflags "-s -w -X main.version=$(VERSION)" -o .local/bin/$(BINARY) .
 	@$(COMPOSE) up -d pvm
 
 .PHONY: down
@@ -63,15 +65,20 @@ down: ## Stop and remove the pvm container (resets installed PHP versions)
 	@$(COMPOSE) down
 
 .PHONY: run
-run: up ## Run pvm in the running container (e.g. make run install 8.5)
-	@$(COMPOSE) exec pvm pvm $(filter-out run,$(MAKECMDGOALS))
+run: up ## Run pvm in the running container (e.g. make run install 8.5, or ARGS="..." to keep quotes)
+	@$(COMPOSE) exec pvm pvm $(RUN_ARGS) $(ARGS)
 
 .PHONY: shell
 shell: up ## Open a bash shell in the pvm container
 	@$(COMPOSE) exec pvm bash
 
-%:
+# `make run exec 8.5 teste.php`: words after `run` are pvm arguments, not make targets.
+ifeq (run,$(firstword $(MAKECMDGOALS)))
+RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+.PHONY: $(RUN_ARGS)
+$(RUN_ARGS):
 	@:
+endif
 
 .PHONY: test
 test: setup ## Run tests (in Docker)

@@ -9,12 +9,15 @@ services:
       GOCACHE: /tmp/go-cache
     volumes:
       - ./dist:/src/dist
+      - ./.local/bin:/src/.local/bin
 
   pvm:
     build:
       context: .
       target: runtime
-      args:
-        VERSION: ${VERSION:-dev}
     entrypoint: ["sleep", "infinity"]
+    working_dir: /app
+    volumes:
+      - .:/app:ro
+      - ./.local/apt/archives:/var/cache/apt/archives
     init: true
