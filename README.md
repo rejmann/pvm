@@ -36,9 +36,10 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$dir*") {
   [Environment]::SetEnvironmentVariable("Path", "$dir;$userPath", "User")
 }
+$env:Path = "$dir;$env:Path"
 ```
 
-Open a new terminal afterwards so the updated `PATH` is picked up.
+The last line makes `pvm` available in the current session; other terminals that were already open need to be restarted to pick up the updated `PATH`.
 
 ### Installing a specific version
 
