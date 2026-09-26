@@ -10,6 +10,7 @@ services:
     volumes:
       - ./dist:/src/dist
       - ./.local/bin:/src/.local/bin
+      - ./.local/go-cache:/tmp/go-cache
 
   app-pvm:
     build:

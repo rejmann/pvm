@@ -42,7 +42,7 @@ Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted
 make pvm ARGS="run 8.5 teste.php 'um argumento com espaços'"
 ```
 
-pvm itself is not baked into the image: `make pvm` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
+pvm itself is not baked into the image: `make pvm` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. The binary is only rebuilt when a `.go` file, `go.mod` or `go.sum` changes, and the Go build cache lives in `.local/go-cache`, so an unchanged `make pvm` takes well under a second. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
 
 No Makefile target may touch the pvm installed on your machine: `make test` and `make lint` only compile and test code (tests use `t.TempDir()`), and the `build*` targets only write to `dist/`.
 

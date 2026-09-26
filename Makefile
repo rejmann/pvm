@@ -30,7 +30,7 @@ help: ## show this help
 
 .PHONY: setup
 setup: ## Build the Docker images (run after changing code or go.mod)
-	@mkdir -p $(DIST) .local/bin .local/apt/archives
+	@mkdir -p $(DIST) .local/bin .local/go-cache .local/apt/archives
 	@$(COMPOSE) build
 
 .PHONY: build
@@ -54,10 +54,16 @@ build-darwin: setup ## Cross-compile for macOS (amd64 + arm64)
 build-windows: setup ## Cross-compile for Windows (amd64)
 	$(call go_build,windows,amd64,$(BINARY)-windows-amd64.exe)
 
-.PHONY: up
-up: setup ## Start the pvm container in background (state persists until `make down`)
+# pvm binary used by the container; rebuilt only when Go sources change.
+PVM_BIN    := .local/bin/$(BINARY)
+GO_SOURCES := $(shell find main.go cmd internal -name '*.go' -not -name '*_test.go') go.mod go.sum
+
+$(PVM_BIN): $(GO_SOURCES)
 	@$(COMPOSE) run --rm -e GOOS=linux -e GOARCH=$(HOST_ARCH) go \
-		go build -ldflags "-s -w -X main.version=$(VERSION)" -o .local/bin/$(BINARY) .
+		go build -ldflags "-s -w -X main.version=$(VERSION)" -o $(PVM_BIN) .
+
+.PHONY: up
+up: setup $(PVM_BIN) ## Start the pvm container in background (state persists until `make down`)
 	@$(COMPOSE) up -d app-pvm
 
 .PHONY: down
