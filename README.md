@@ -36,9 +36,10 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$dir*") {
   [Environment]::SetEnvironmentVariable("Path", "$dir;$userPath", "User")
 }
+$env:Path = "$dir;$env:Path"
 ```
 
-Open a new terminal afterwards so the updated `PATH` is picked up.
+The last line makes `pvm` available in the current session; other terminals that were already open need to be restarted to pick up the updated `PATH`.
 
 ### Installing a specific version
 
@@ -92,23 +93,10 @@ pvm remove 8.3         # alias: rm
 
 # Upgrade pvm itself to the latest release
 pvm self-upgrade
+
+# Uninstall pvm
+pvm self-remove
 ```
-
-## Per-project versions
-
-If a project has a `.php-version` file, `php` switches automatically to that version inside the project directory and its subdirectories:
-
-```sh
-cd ~/code/legacy-app   # contains .php-version with 7.4
-php -v                 # PHP 7.4.x
-pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
-pvm which              # /usr/bin/php7.4
-
-PVM_VERSION=8.3 php -v # one-off override
-pvm run 8.2 script.php # run a script with a specific version
-```
-
-`pvm use` without arguments activates the version from `.php-version` globally. Automatic per-directory switching currently works on Linux and macOS. It requires the shim directory in your `PATH` (see below).
 
 ## Requirements
 
@@ -135,6 +123,15 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 | Windows | `%LOCALAPPDATA%\pvm\shims` | `setx PATH "%LOCALAPPDATA%\pvm\shims;%PATH%"` |
 
 > `pvm use` prints the exact command if the directory is not yet in your PATH.
+
+## Uninstall
+
+```sh
+pvm self-remove        # asks before removing anything
+pvm self-remove --php  # also remove the PHP versions installed through pvm
+```
+
+It removes the pvm binary and its data directory and, on Windows, the pvm entries in the user `PATH` and the PowerShell profile. On Windows the PHP versions live in the data directory and are always removed; on Linux and macOS they are system/Homebrew packages and are kept unless you pass `--php`. Run it without `sudo` — if the binary is in a root-owned directory, it prints the `sudo rm` command to finish. See [docs/commands.md](docs/commands.md#pvm-self-remove) for details.
 
 ## Build
 

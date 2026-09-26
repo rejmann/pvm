@@ -31,6 +31,7 @@ func main() {
 		cmd.RunCmd,
 		cmd.ShimCmd,
 		cmd.SelfUpgradeCmd,
+		cmd.SelfRemoveCmd,
 	}
 	rootCmd.AddCommand(cmds...)
 	rootCmd.Version = version

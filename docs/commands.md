@@ -333,3 +333,35 @@ sudo pvm self-upgrade      # when pvm lives in a root-owned directory such as /u
 4. Writes it next to the running binary (symlinks resolved) and renames it over the old one, so a failed upgrade never leaves a broken binary. On Windows the running `pvm.exe` is first moved to `pvm.exe.old`, which the next upgrade removes.
 
 If the directory is not writable, it fails with `permission denied` and suggests re-running with `sudo`. On Windows the hint is to run it from a terminal opened as Administrator. Every published platform can self-upgrade: Linux (amd64, arm64), macOS (amd64, arm64) and Windows amd64; releases published before a platform was added fail with `has no build for <os>/<arch>`.
+
+## `pvm self-remove`
+
+Uninstalls pvm: removes its binary and data directory and, on Windows, what it set up in the user environment.
+
+```
+pvm self-remove [--php] [--yes]
+
+Flags:
+      --php   Also remove the PHP versions installed through pvm
+  -y, --yes   Do not ask for confirmation
+```
+
+### Examples
+
+```sh
+pvm self-remove          # lists what will be removed and asks before doing it
+pvm self-remove --php    # also uninstalls the PHP versions (apt/dnf/brew packages)
+pvm self-remove --yes    # no prompt, e.g. in scripts
+```
+
+### What it does
+
+1. Lists the pvm binary, the data directory (`~/.pvm`, `%LOCALAPPDATA%\pvm` or `$PVM_HOME`) and the installed PHP versions, then asks for confirmation.
+2. With `--php`, removes each installed PHP version like `pvm remove` does. On Windows the PHP builds live in the data directory, so they are removed even without `--php`; on Linux and macOS they are system/Homebrew packages and are kept otherwise.
+3. On Windows, removes the shim directory and the pvm binary directory from the user `PATH`, and the `# pvm-wrapper` block from the PowerShell profile. Failures here are reported as warnings.
+4. Deletes the data directory.
+5. Deletes the pvm binary. On Windows a running `.exe` cannot be deleted, so it is renamed and a background `cmd.exe` deletes it — and its directory, if left empty — right after pvm exits.
+
+Run it as your regular user, not with `sudo`: under `sudo` the data directory would resolve to root's home. If the binary lives in a root-owned directory such as `/usr/local/bin`, everything else is removed and the command ends with `permission denied — finish with: sudo rm /usr/local/bin/pvm`.
+
+It refuses to run when `PVM_HOME` points at the home or root directory, since the whole data directory is deleted. pvm never edits shell config files, so on Linux and macOS remove the `export PATH="$HOME/.pvm/..."` line yourself.

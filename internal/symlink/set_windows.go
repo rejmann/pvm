@@ -3,6 +3,7 @@
 package symlink
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,54 +49,95 @@ func setCurrentWindows(base, version, binaryPath string) error {
 	}
 
 	prependToUserPath(shimDir)
-	installPowerShellWrapper(base, shimDir)
+	installPowerShellWrapper(shimDir)
 
 	return writeCurrentVersion(base, version)
 }
 
-// installPowerShellWrapper appends a pvm wrapper function to the user's
+// installPowerShellWrapper writes a pvm wrapper function to the user's
 // PowerShell profile so that `pvm use` updates $env:PATH in the current
-// session automatically. Best-effort — silently ignored on failure.
-func installPowerShellWrapper(base, shimDir string) {
-	profileOut, err := exec.Command(
-		"powershell", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE",
-	).Output()
+// session automatically. A block left by an older pvm is replaced.
+// Best-effort — silently ignored on failure.
+func installPowerShellWrapper(shimDir string) {
+	pvmExe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	profilePath := strings.TrimSpace(string(profileOut))
-	if profilePath == "" {
+
+	profilePath, err := powerShellProfilePath()
+	if err != nil {
 		return
 	}
 
 	existing, _ := os.ReadFile(profilePath)
-	if strings.Contains(string(existing), "# pvm-wrapper") {
+	updated, changed := upsertPowerShellWrapper(string(existing), powerShellWrapper(pvmExe, shimDir))
+	if !changed {
 		return
 	}
-
-	wrapper := fmt.Sprintf(`
-# pvm-wrapper — managed by pvm, do not edit this block manually
-function Invoke-PVM {
-    $exe = "%s\pvm.exe"
-    if (-not (Test-Path $exe)) { $exe = (Get-Command pvm.exe -ErrorAction SilentlyContinue)?.Source }
-    if (-not $exe) { Write-Error "pvm.exe not found"; return }
-    & $exe @args
-    if ($LASTEXITCODE -eq 0 -and $args.Count -gt 0 -and $args[0] -eq 'use') {
-        $shimDir = "%s"
-        $env:PATH = $shimDir + ';' + (($env:PATH -split ';') | Where-Object { $_ -ne $shimDir -and $_ } | Join-String -Separator ';')
-    }
-}
-Set-Alias -Name pvm -Value Invoke-PVM -Force
-# end pvm-wrapper
-`, base, shimDir)
 
 	_ = os.MkdirAll(filepath.Dir(profilePath), 0755)
-	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
+	_ = os.WriteFile(profilePath, []byte(updated), 0644)
+}
+
+// RemoveIntegration undoes what pvm set up outside its data directory: the
+// shim directory and binDir entries in the user PATH, and the wrapper in the
+// PowerShell profile.
+func RemoveIntegration(base, binDir string) error {
+	if err := removeFromUserPath(ShimDir(base), binDir); err != nil {
+		return fmt.Errorf("update user PATH: %w", err)
 	}
-	defer f.Close()
-	_, _ = f.WriteString(wrapper)
+
+	profilePath, err := powerShellProfilePath()
+	if err != nil {
+		return fmt.Errorf("locate PowerShell profile: %w", err)
+	}
+	existing, err := os.ReadFile(profilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read PowerShell profile: %w", err)
+	}
+	updated, changed := removePowerShellWrapper(string(existing))
+	if !changed {
+		return nil
+	}
+	if err := os.WriteFile(profilePath, []byte(updated), 0644); err != nil {
+		return fmt.Errorf("write PowerShell profile: %w", err)
+	}
+	return nil
+}
+
+// powerShellProfilePath returns $PROFILE of Windows PowerShell.
+func powerShellProfilePath() (string, error) {
+	out, err := exec.Command(
+		"powershell", "-NoProfile", "-NonInteractive", "-Command", "$PROFILE",
+	).Output()
+	if err != nil {
+		return "", err
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return "", errors.New("$PROFILE is empty")
+	}
+	return p, nil
+}
+
+// removeFromUserPath drops dirs from the current user PATH in the Windows
+// registry.
+func removeFromUserPath(dirs ...string) error {
+	quoted := make([]string, len(dirs))
+	for i, d := range dirs {
+		quoted[i] = "'" + psSingleQuote(d) + "'"
+	}
+	script := fmt.Sprintf(`
+$dirs = @(%s)
+$current = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+$parts = @($current -split ';' | Where-Object { $_ -and $dirs -notcontains $_.TrimEnd('\') })
+[System.Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User')
+`, strings.Join(quoted, ", "))
+
+	return exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script).Run()
 }
 
 // prependToUserPath adds dir to the front of the current user PATH in the

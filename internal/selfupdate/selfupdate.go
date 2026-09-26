@@ -211,6 +211,13 @@ func wrapPermission(err error, dir string) error {
 	return fmt.Errorf("replace binary: %w", err)
 }
 
+func wrapRemove(err error, dir string) error {
+	if errors.Is(err, os.ErrPermission) {
+		return fmt.Errorf("%w: cannot write to %s", ErrPermission, dir)
+	}
+	return fmt.Errorf("remove binary: %w", err)
+}
+
 // SameVersion reports whether two version strings name the same release,
 // ignoring a leading "v".
 func SameVersion(a, b string) bool {

@@ -90,6 +90,12 @@ func removeCurrentShim(base string) error {
 	return removeCurrentVersion(base)
 }
 
+// RemoveIntegration is a no-op on Unix: pvm never edits shell config files,
+// and everything else it creates lives in base.
+func RemoveIntegration(base, binDir string) error {
+	return nil
+}
+
 func removeCurrentVersion(base string) error {
 	vf := filepath.Join(base, "current-version")
 	if err := os.Remove(vf); err != nil && !errors.Is(err, os.ErrNotExist) {
