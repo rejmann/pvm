@@ -137,6 +137,48 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 > `pvm use` prints the exact command if the directory is not yet in your PATH.
 
+## Uninstall
+
+First, optionally remove the PHP versions installed through pvm. On Linux and macOS they are system/Homebrew packages, so they stay installed if you skip this step:
+
+```sh
+pvm list
+pvm remove 8.3         # repeat for each version
+```
+
+The paths below assume the default data directory; if you set `PVM_HOME`, remove that directory instead.
+
+### Linux / macOS
+
+```sh
+sudo rm -f /usr/local/bin/pvm
+rm -rf ~/.pvm
+```
+
+Then delete the `export PATH="$HOME/.pvm/..."` line from `~/.bashrc` / `~/.zshrc` and open a new terminal.
+
+### Windows (PowerShell)
+
+```powershell
+$bin  = "$env:LOCALAPPDATA\Programs\pvm"
+$data = "$env:LOCALAPPDATA\pvm"
+Remove-Item -Recurse -Force $bin, $data -ErrorAction SilentlyContinue
+
+# remove both directories from the user PATH
+$shims = "$data\shims"
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$newPath = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $bin -and $_ -ne $shims }) -join ';'
+[Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+
+# remove the pvm-wrapper block that `pvm use` added to your PowerShell profile
+if (Test-Path $PROFILE) {
+  $content = (Get-Content $PROFILE -Raw) -replace '(?s)\r?\n# pvm-wrapper.*?# end pvm-wrapper\r?\n?', ''
+  [IO.File]::WriteAllText($PROFILE, $content)
+}
+```
+
+Open a new terminal afterwards.
+
 ## Build
 
 Requires only `make` and Docker Compose — Go runs inside containers, never on your machine:
