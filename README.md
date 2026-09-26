@@ -91,6 +91,23 @@ pvm use lts
 pvm remove 8.3         # alias: rm
 ```
 
+## Per-project versions
+
+Pin a version for a project with a `.php-version` file. `php` then switches automatically inside that directory and its subdirectories:
+
+```sh
+cd ~/code/legacy-app
+pvm local 7.4          # writes .php-version
+php -v                 # PHP 7.4.x
+pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
+pvm which              # /usr/bin/php7.4
+
+PVM_VERSION=8.3 php -v # one-off override
+pvm run 8.2 script.php # run a script with a specific version
+```
+
+`pvm use` without arguments activates the version from `.php-version` globally. Automatic per-directory switching currently works on Linux and macOS. It requires the shim directory in your `PATH` (see below).
+
 ## Requirements
 
 | OS | Requirement |
@@ -119,15 +136,16 @@ After the first `pvm use`, add the pvm shim directory to your PATH once:
 
 ## Build
 
-```sh
-go build -o pvm .
-```
-
-Cross-compile for Windows from Linux/macOS:
+Requires only `make` and Docker Compose — Go runs inside containers, never on your machine:
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o pvm.exe .
+make setup        # build the Docker images
+make build        # dist/pvm for your OS/arch
+make build-all    # all platforms, e.g. dist/pvm-windows-amd64.exe
+make test
 ```
+
+> **Developing pvm?** Use `make pvm <command>` — it runs pvm inside a Docker container, never on your machine, so your real pvm and system PHP stay untouched. See [docs/development.md](docs/development.md).
 
 ## Documentation
 

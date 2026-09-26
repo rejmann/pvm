@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/project"
 	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/rejmann/pvm/internal/system"
 	"github.com/rejmann/pvm/internal/version"
@@ -16,16 +18,24 @@ import (
 )
 
 var UseCmd = &cobra.Command{
-	Use:     "use [u] <version|lts>",
+	Use:     "use [u] [version|lts]",
 	Aliases: []string{"u"},
-	Short:   "Switch to a PHP version",
-	Args:    cobra.ExactArgs(1),
-	RunE:    runUse,
+	Short:   "Switch the global PHP version",
+	Long: `Switch the global PHP version.
+
+Without arguments, uses the version from the nearest .php-version file.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runUse,
 }
 
 func runUse(cmd *cobra.Command, args []string) error {
+	arg, err := useArg(args, ".", cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
+
 	return useVersion(
-		args[0],
+		arg,
 		phpfs.NewManager(baseDir()),
 		phpLTSResolver{ctx: cmd.Context()},
 		cmd.OutOrStdout(),
@@ -73,14 +83,27 @@ func useVersion(
 	return nil
 }
 
-func printPathHint(out io.Writer, base string) {
-	var managed string
-	switch runtime.GOOS {
-	case system.Linux:
-		managed = filepath.Join(base, "bin")
-	default:
-		managed = filepath.Join(base, "shims")
+// useArg returns the version to switch to: the explicit argument, or the one
+// declared in the nearest .php-version when none is given.
+func useArg(args []string, dir string, out io.Writer) (string, error) {
+	if len(args) > 0 {
+		return args[0], nil
 	}
+
+	v, path, err := project.Find(dir)
+	if errors.Is(err, project.ErrNotFound) {
+		return "", fmt.Errorf("no version given and no %s found — run: pvm use <version>", project.FileName)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Fprintf(out, "Found %s with version %s.\n", path, v)
+	return v, nil
+}
+
+func printPathHint(out io.Writer, base string) {
+	managed := symlink.ShimDir(base)
 
 	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
 		if strings.EqualFold(p, managed) {

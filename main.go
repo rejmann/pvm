@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is set at build time via -ldflags "-X main.version=<tag>".
+var version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:           "pvm",
 	Short:         "PVM is a tool for managing multiple versions of PHP.",
@@ -24,8 +27,13 @@ func main() {
 		cmd.UseCmd,
 		cmd.RemoveCmd,
 		cmd.CurrentCmd,
+		cmd.LocalCmd,
+		cmd.WhichCmd,
+		cmd.RunCmd,
+		cmd.ShimCmd,
 	}
 	rootCmd.AddCommand(cmds...)
+	rootCmd.Version = version
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

@@ -47,12 +47,12 @@ var packageManagers = []pkgManagerDef{
 			fmt.Println("Package not found, adding ondrej/php PPA...")
 			add := exec.Command("sudo", "add-apt-repository", "-y", "ppa:ondrej/php")
 			add.Stdout, add.Stderr = os.Stdout, os.Stderr
+			// add-apt-repository already runs apt-get update; a second update
+			// right after it can fail on the apt lists lock.
 			if err := add.Run(); err != nil {
 				return fmt.Errorf("add-apt-repository: %w", err)
 			}
-			upd := exec.Command("sudo", pmApt, "update")
-			upd.Stdout, upd.Stderr = os.Stdout, os.Stderr
-			return upd.Run()
+			return nil
 		},
 	},
 	{

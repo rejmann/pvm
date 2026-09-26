@@ -1,23 +1,79 @@
 # Development Guide
 
+**Go never runs on your machine.** Every `make` target builds, tests or runs pvm inside Docker through [compose.yaml](../compose.yaml), so the only requirements are `make` and Docker Compose — no local Go toolchain. Do not run `go build`, `go test` or `go run` directly.
+
+```sh
+make setup        # build the Docker images (the other targets also run it, cached)
+```
+
+| Target | What it does (all in Docker) |
+|--------|------------------------------|
+| `make setup` | `docker compose build` — images with the current code |
+| `make pvm <args>` | Runs `pvm <args>` in the running Ubuntu container (`pvm` service) |
+| `make shell` | Opens bash in that container |
+| `make up` / `make down` | Starts / removes the container (`down` resets installed PHP versions) |
+| `make test` | `go test ./...` |
+| `make lint` | `go vet ./...` |
+| `make build` | Binary for your OS/arch → `dist/pvm` |
+| `make build-all` | All release platforms → `dist/pvm-<os>-<arch>` |
+
+## Running pvm during development
+
+**pvm under development always runs inside a Docker container, never on your machine.** `pvm install`, `use` and `remove` call `sudo apt` and `sudo update-alternatives` on Linux, so a dev build run on the host would change your real `~/.pvm` and your system PHP.
+
+```sh
+make pvm install 8.5
+make pvm use 8.5
+make pvm list
+make pvm -- -v        # pvm flags need `--`, otherwise make parses them
+make pvm run 8.5 teste.php
+make pvm -- run teste.php -v 8.2   # flags after `pvm` need `--`
+make shell            # then: php -v → PHP 8.5.x
+make down             # back to a clean container
+```
+
+`make pvm` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions and the active version persist until `make down`. The project is mounted read-only at `/app` (the working directory), so PHP can run files from the repo — `make pvm run 8.5 teste.php` — but nothing in the container can change them (`pvm local` there fails with "read-only file system"). Flags after `pvm` need `--` or `ARGS`, since make would parse them itself: `make pvm -- run 8.5 --file teste.php`.
+
+Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted into the container), so after `make down` the next `pvm install` of the same version doesn't download anything again. The files there are created by root inside the container; remove them with `sudo rm -rf .local` if you need to clear the cache.
+
+`make pvm` receives its arguments as make goals, so quotes and spaces are lost. For arguments like that, pass them in `ARGS`, which the shell parses normally:
+
+```sh
+make pvm ARGS="run 8.5 teste.php 'um argumento com espaços'"
+```
+
+pvm itself is not baked into the image: `make pvm` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. The binary is only rebuilt when a `.go` file, `go.mod` or `go.sum` changes, and the Go build cache lives in `.local/go-cache`, so an unchanged `make pvm` takes well under a second. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
+
+No Makefile target may touch the pvm installed on your machine: `make test` and `make lint` only compile and test code (tests use `t.TempDir()`), and the `build*` targets only write to `dist/`.
+
 ## Building
 
 ```sh
-go build -o pvm .
-./pvm available
+make build        # dist/pvm for your OS/arch
+make build-all    # dist/pvm-linux-amd64, pvm-darwin-arm64, pvm-windows-amd64.exe, ...
 ```
 
-Cross-compile for Windows from Linux/macOS:
+Binaries are compiled by the `go` service, which mounts `./dist` as a volume and runs as your user, so files in `dist/` are owned by you. The version shown by `pvm --version` comes from `git describe` (defaults to `dev`).
+
+Do not run a `dist/` binary on your machine for commands that change state (`install`, `use`, `remove`, `local`) — use `make pvm` instead (see above).
+
+For a one-off Go command that writes to the repo (e.g. `go mod tidy`), run the Go image with the repo mounted instead of a local toolchain:
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o pvm.exe .
+docker run --rm -u "$(id -u):$(id -g)" -e GOCACHE=/tmp/cache -e GOMODCACHE=/tmp/mod \
+  -v "$PWD":/src -w /src golang:1.27-alpine go mod tidy
 ```
 
 ## Running tests
 
 ```sh
-go test ./...
+make test
+make lint
 ```
+
+CI (`.github/workflows/ci.yml`) runs `go vet` and `go test -race` on Linux, macOS and Windows for every pull request.
+
+Tests must not touch the real system: use `t.TempDir()` as the pvm base dir, and inject fake `InstallerFunc` / `RemoverFunc` / `version.Resolver` values. Code paths that call `symlink.SetCurrent` or `symlink.RemoveCurrent` run `sudo update-alternatives` on Linux, so they are intentionally left out of unit tests.
 
 ## Project conventions
 

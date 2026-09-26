@@ -12,6 +12,13 @@ pvm/
 │   ├── list.go                  # `pvm list` command
 │   ├── use.go                   # `pvm use` command
 │   ├── remove.go                # `pvm remove` command
+│   ├── local.go                 # `pvm local` command (.php-version)
+│   ├── which.go                 # `pvm which` command
+│   ├── run.go                   # `pvm run` — run a PHP file with a specific version
+│   ├── shim.go                  # hidden `pvm shim php` — entry point of the php shim
+│   ├── active.go                # resolveActive(): PVM_VERSION → .php-version → global
+│   ├── exec_unix.go             # execBinary() via syscall.Exec
+│   ├── exec_windows.go          # execBinary() via child process + exit code
 │   ├── lts_resolver.go          # Bridges cobra context → php.LatestLTS
 │   ├── env.go                   # baseDir() for Linux/macOS → ~/.pvm
 │   └── env_windows.go           # baseDir() for Windows → %LOCALAPPDATA%\pvm
@@ -41,7 +48,11 @@ pvm/
     │   ├── get.go               # GetCurrent() — reads current-version file
     │   ├── set.go               # SetCurrent() / RemoveCurrent() dispatcher
     │   ├── set_unix.go          # Unix: symlinks + update-alternatives (Linux)
-    │   └── set_windows.go       # Windows: batch shim
+    │   ├── set_windows.go       # Windows: batch shim
+    │   ├── shim.go              # ShimDir(): ~/.pvm/bin (Linux) or shims/ (others)
+    │   └── shim_unix.go         # EnsureShim(): writes the php shim script
+    ├── project/
+    │   └── project.go           # Find/Read/Write/Remove .php-version
     ├── system/
     │   └── system.go            # OS constants (Linux, Darwin, Windows)
     └── version/
@@ -57,9 +68,9 @@ pvm/
 ~/.pvm/                        (or $PVM_HOME)
 ├── current-version            # plain text: "8.3" — written by pvm use
 ├── bin/
-│   └── php                    # symlink → active PHP binary (Linux)
+│   └── php                    # shim script → `pvm shim php` (Linux)
 ├── shims/
-│   └── php                    # symlink → active PHP binary (macOS)
+│   └── php                    # shim script → `pvm shim php` (macOS)
 └── versions/
     ├── 8.3/
     │   └── binary             # plain text: /usr/bin/php8.3
@@ -135,8 +146,8 @@ cmd.runUse
   └─ fs.Manager.GetVersionBinary()
   └─ symlink.SetCurrent(base, ver, binPath)  ← dispatches by runtime.GOOS
        ├─ Linux:   update-alternatives --set php <binary>
-       │           + ~/.pvm/bin/php symlink
-       ├─ macOS:   ~/.pvm/shims/php symlink
+       │           + EnsureShim() → ~/.pvm/bin/php
+       ├─ macOS:   EnsureShim() → ~/.pvm/shims/php
        └─ Windows: resolves php.exe from %LOCALAPPDATA%\pvm\php\<branch>\
                    writes %LOCALAPPDATA%\pvm\shims\php.bat
   └─ writeCurrentVersion(base, ver)
@@ -168,13 +179,28 @@ cmd.runList
   └─ print grouped table to stdout
 ```
 
-## Data flow — `pvm current`
+## Data flow — `php` (via shim)
 
 ```
-cmd.runCurrent
-  └─ symlink.GetCurrent(base)                ← reads current-version file
-       ├─ version found → print "Current PHP version: <ver>"
-       └─ ErrNoCurrentVersion → print "No PHP version is currently active."
+~/.pvm/bin/php "$@"                          ← #!/bin/sh script written by EnsureShim
+  └─ exec pvm shim php "$@"
+       └─ cmd.shimTarget
+            ├─ cmd.resolveActive(base, cwd, $PVM_VERSION)
+            │    ├─ $PVM_VERSION
+            │    ├─ project.Find(cwd)        ← nearest .php-version walking up
+            │    ├─ symlink.GetCurrent(base) ← global current-version
+            │    └─ fs.Manager.MatchInstalled() → versions/<ver>/binary
+            └─ ErrNoActiveVersion → first php on PATH outside ShimDir
+       └─ execBinary()                       ← syscall.Exec, so pvm is replaced by php
+```
+
+## Data flow — `pvm current` / `pvm which`
+
+```
+cmd.runCurrent / cmd.runWhich
+  └─ cmd.resolveActive(base, cwd, $PVM_VERSION)
+       ├─ found → print version (+ source) or binary path
+       └─ ErrNoActiveVersion → "No PHP version is currently active."
 ```
 
 ## Key design decisions
@@ -185,4 +211,5 @@ cmd.runCurrent
 - **`version.Resolver` interface** — decouples alias resolution from the php.net API, enabling unit-testing without network calls.
 - **`binary` file** — stores only the resolved binary path, keeping version detection O(1) (one file read + stat).
 - **Concurrent branch fetching** — `FetchAllBranches` fans out one goroutine per active major version, reducing latency when php.net is slow.
-- **`current-version` file** — plain-text file tracking the active version; used by `pvm list`. On Linux it is complementary to `update-alternatives`; on Windows/macOS it is the sole source of truth for display.
+- **`current-version` file** — plain-text file tracking the global version; used by `pvm list` and as the shim's fallback. On Linux it is complementary to `update-alternatives`, which keeps `/usr/bin/php` pointing at the global version for services that do not use the shim.
+- **Dynamic shim instead of a symlink** — the Unix shim is a tiny `sh` script that calls `pvm shim php`, so the version is picked per call from `PVM_VERSION`/`.php-version`/global. pvm then `exec`s the real binary, adding ~2 ms and keeping signals, stdin and the exit code intact. The shim embeds pvm's absolute path and is regenerated by `pvm use` / `pvm local`.

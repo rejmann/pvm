@@ -64,3 +64,8 @@ func (v Version) Compare(other Version) int {
 	}
 	return 0
 }
+
+// HasPatch reports whether the patch component was given explicitly ("8.3.1" vs "8.3").
+func (v Version) HasPatch() bool {
+	return v.hasPatch
+}

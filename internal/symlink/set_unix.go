@@ -39,8 +39,8 @@ func setCurrentLinux(base, version, binaryPath string) error {
 		return fmt.Errorf("update-alternatives --set php %s: %w", binaryPath, err)
 	}
 
-	if err := updateSymlink(filepath.Join(base, "bin", "php"), binaryPath); err != nil {
-		return fmt.Errorf("update pvm bin symlink: %w", err)
+	if err := EnsureShim(base); err != nil {
+		return fmt.Errorf("install php shim: %w", err)
 	}
 
 	localBin := filepath.Join(filepath.Dir(base), ".local", "bin", "php")
@@ -54,15 +54,8 @@ func setCurrentLinux(base, version, binaryPath string) error {
 }
 
 func setCurrentShim(base, version, binaryPath string) error {
-	shimDir := filepath.Join(base, "shims")
-	if err := os.MkdirAll(shimDir, 0755); err != nil {
-		return fmt.Errorf("create shims directory: %w", err)
-	}
-
-	shimPath := filepath.Join(shimDir, "php")
-	_ = os.Remove(shimPath)
-	if err := os.Symlink(binaryPath, shimPath); err != nil {
-		return fmt.Errorf("create php shim: %w", err)
+	if err := EnsureShim(base); err != nil {
+		return fmt.Errorf("install php shim: %w", err)
 	}
 
 	return writeCurrentVersion(base, version)
@@ -90,11 +83,10 @@ func removeCurrentLinux(base string) error {
 	return removeCurrentVersion(base)
 }
 
+// removeCurrentShim keeps the shim in place: with no global version it still
+// serves projects that have a .php-version, and otherwise falls back to the
+// system php.
 func removeCurrentShim(base string) error {
-	shimPath := filepath.Join(base, "shims", "php")
-	if err := os.Remove(shimPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove php shim: %w", err)
-	}
 	return removeCurrentVersion(base)
 }
 
