@@ -247,14 +247,14 @@ pvm which         # → /usr/bin/php8.3
 
 ---
 
-## `pvm exec [-v version | version] <file> [args...]`
+## `pvm run [-v version | version] <file> [args...]`
 
 Runs a PHP file with a specific installed version, without changing the global or project version.
 
 ```
-pvm exec [version|lts] <file> [args...]
-pvm exec [version|lts] -f|--file <file> [args...]
-pvm exec -v|--version <version|lts> <file> [args...]
+pvm run [version|lts] <file> [args...]
+pvm run [version|lts] -f|--file <file> [args...]
+pvm run -v|--version <version|lts> <file> [args...]
 
 Arguments:
   version    Installed version or branch (e.g. 8.2 matches the highest installed 8.2.x),
@@ -265,19 +265,19 @@ Arguments:
   args       Passed to the script unchanged
 ```
 
-A file is mandatory: `pvm exec`, `pvm exec 8.5`, `pvm exec -v` or `pvm exec 8.5 -r '...'` fail with `no PHP file given`, and a missing file or a directory fails before php starts. The first argument is taken as the version only if it looks like one (`8.5`, `8.2.30`, `lts`). `-v`/`--version` works anywhere (`pvm exec script.php -v 8.2`); giving the version twice is an error. Arguments after `--` go to the script untouched, so use it when the script has its own `-v`: `pvm exec script.php -- -v 8.2`.
+A file is mandatory: `pvm run`, `pvm run 8.5`, `pvm run -v` or `pvm run 8.5 -r '...'` fail with `no PHP file given`, and a missing file or a directory fails before php starts. The first argument is taken as the version only if it looks like one (`8.5`, `8.2.30`, `lts`). `-v`/`--version` works anywhere (`pvm run script.php -v 8.2`); giving the version twice is an error. Arguments after `--` go to the script untouched, so use it when the script has its own `-v`: `pvm run script.php -- -v 8.2`.
 
 ### Examples
 
 ```sh
-pvm exec 8.5 script.php --input data.txt
-pvm exec 8.2 --file script.php
-pvm exec --version 8.2 script.php
-pvm exec -v lts script.php
-pvm exec script.php -v 8.2
-pvm exec script.php -- -v   # -v goes to the script
-pvm exec 8.2 vendor/bin/phpunit
-pvm exec script.php       # version in use in this directory
+pvm run 8.5 script.php --input data.txt
+pvm run 8.2 --file script.php
+pvm run --version 8.2 script.php
+pvm run -v lts script.php
+pvm run script.php -v 8.2
+pvm run script.php -- -v   # -v goes to the script
+pvm run 8.2 vendor/bin/phpunit
+pvm run script.php       # version in use in this directory
 ```
 
 ### What it does

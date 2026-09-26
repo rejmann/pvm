@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ExecCmd = &cobra.Command{
-	Use:   "exec [-v version | version] <file> [args...]",
+var RunCmd = &cobra.Command{
+	Use:   "run [-v version | version] <file> [args...]",
 	Short: "Run a PHP file with a specific installed version (default: the version in use)",
 	Long: `Run a PHP file with a specific installed version, without changing the
 global or project version. The file can be given directly or with -f/--file;
@@ -26,17 +26,17 @@ the global version).
 
 PVM_VERSION is set for the php process, so tools it starts that call php
 (e.g. Composer or scripts with #!/usr/bin/env php) use the same version.`,
-	Example: `  pvm exec 8.5 script.php
-  pvm exec 8.2 --file script.php arg1 arg2
-  pvm exec --version 8.2 script.php
-  pvm exec -v lts script.php
-  pvm exec lts script.php
-  pvm exec script.php       # version in use`,
+	Example: `  pvm run 8.5 script.php
+  pvm run 8.2 --file script.php arg1 arg2
+  pvm run --version 8.2 script.php
+  pvm run -v lts script.php
+  pvm run lts script.php
+  pvm run script.php       # version in use`,
 	DisableFlagParsing: true,
-	RunE:               runExec,
+	RunE:               runRun,
 }
 
-func runExec(cmd *cobra.Command, args []string) error {
+func runRun(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		return cmd.Help()
 	}
@@ -46,15 +46,15 @@ func runExec(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	versionArg, rest, err := splitExecArgs(args)
+	versionArg, rest, err := splitRunArgs(args)
 	if err != nil {
 		return err
 	}
-	if err := checkExecFile(rest, dir); err != nil {
+	if err := checkRunFile(rest, dir); err != nil {
 		return err
 	}
 
-	installed, bin, err := execResolve(
+	installed, bin, err := runResolve(
 		versionArg,
 		phpfs.NewManager(baseDir()),
 		phpLTSResolver{ctx: cmd.Context()},
@@ -71,11 +71,11 @@ func runExec(cmd *cobra.Command, args []string) error {
 	return execBinary(bin, rest)
 }
 
-// splitExecArgs separates the optional version from the php arguments. The
+// splitRunArgs separates the optional version from the php arguments. The
 // version comes from -v/--version anywhere before a "--", or positionally from
 // a first argument that parses as a version or alias ("lts"). Everything after
 // "--" goes to the script untouched.
-func splitExecArgs(args []string) (versionArg string, rest []string, err error) {
+func splitRunArgs(args []string) (versionArg string, rest []string, err error) {
 	set := func(v string) error {
 		if versionArg != "" {
 			return fmt.Errorf("version given twice (%s and %s)", versionArg, v)
@@ -123,23 +123,23 @@ func looksLikeVersion(s string) bool {
 	return err == nil || version.IsAlias(s)
 }
 
-var ErrNoExecFile = errors.New("no PHP file given — usage: pvm exec [-v version | version] <file> [args...]")
+var ErrNoRunFile = errors.New("no PHP file given — usage: pvm run [-v version | version] <file> [args...]")
 
-// checkExecFile makes sure the php arguments start with an existing file,
-// given directly or with -f/--file, so exec only ever runs a script.
-func checkExecFile(rest []string, dir string) error {
+// checkRunFile makes sure the php arguments start with an existing file,
+// given directly or with -f/--file, so run only ever runs a script.
+func checkRunFile(rest []string, dir string) error {
 	if len(rest) == 0 {
-		return ErrNoExecFile
+		return ErrNoRunFile
 	}
 
 	file := rest[0]
 	if file == "-f" || file == "--file" {
 		if len(rest) < 2 {
-			return ErrNoExecFile
+			return ErrNoRunFile
 		}
 		file = rest[1]
 	} else if strings.HasPrefix(file, "-") {
-		return ErrNoExecFile
+		return ErrNoRunFile
 	}
 
 	path := file
@@ -156,16 +156,16 @@ func checkExecFile(rest []string, dir string) error {
 	return nil
 }
 
-// execResolve returns the version and binary to run: versionArg when given,
+// runResolve returns the version and binary to run: versionArg when given,
 // otherwise the version in use for dir.
-func execResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, env string) (installed, bin string, err error) {
+func runResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, env string) (installed, bin string, err error) {
 	if versionArg != "" {
-		return execTarget(versionArg, m, r)
+		return runTarget(versionArg, m, r)
 	}
 
 	a, err := resolveActive(m, dir, env)
 	if errors.Is(err, ErrNoActiveVersion) {
-		return "", "", fmt.Errorf("%w — pass one (pvm exec 8.3 ...) or run: pvm use <version>", err)
+		return "", "", fmt.Errorf("%w — pass one (pvm run 8.3 ...) or run: pvm use <version>", err)
 	}
 	if err != nil {
 		return "", "", err
@@ -173,9 +173,9 @@ func execResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, e
 	return a.Version, a.Binary, nil
 }
 
-// execTarget resolves arg (a version, branch or "lts") to an installed
+// runTarget resolves arg (a version, branch or "lts") to an installed
 // version and its php binary.
-func execTarget(arg string, m *phpfs.Manager, r version.Resolver) (installed, bin string, err error) {
+func runTarget(arg string, m *phpfs.Manager, r version.Resolver) (installed, bin string, err error) {
 	concrete, _, err := version.Resolve(arg, r)
 	if err != nil {
 		return "", "", err

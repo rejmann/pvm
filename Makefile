@@ -58,25 +58,25 @@ build-windows: setup ## Cross-compile for Windows (amd64)
 up: setup ## Start the pvm container in background (state persists until `make down`)
 	@$(COMPOSE) run --rm -e GOOS=linux -e GOARCH=$(HOST_ARCH) go \
 		go build -ldflags "-s -w -X main.version=$(VERSION)" -o .local/bin/$(BINARY) .
-	@$(COMPOSE) up -d pvm
+	@$(COMPOSE) up -d app-pvm
 
 .PHONY: down
 down: ## Stop and remove the pvm container (resets installed PHP versions)
 	@$(COMPOSE) down
 
-.PHONY: run
-run: up ## Run pvm in the running container (e.g. make run install 8.5, or ARGS="..." to keep quotes)
-	@$(COMPOSE) exec pvm pvm $(RUN_ARGS) $(ARGS)
+.PHONY: pvm
+pvm: up ## Run pvm in the running container (e.g. make pvm install 8.5, or ARGS="..." to keep quotes)
+	@$(COMPOSE) exec app-pvm pvm $(PVM_ARGS) $(ARGS)
 
 .PHONY: shell
 shell: up ## Open a bash shell in the pvm container
-	@$(COMPOSE) exec pvm bash
+	@$(COMPOSE) exec app-pvm bash
 
-# `make run exec 8.5 teste.php`: words after `run` are pvm arguments, not make targets.
-ifeq (run,$(firstword $(MAKECMDGOALS)))
-RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-.PHONY: $(RUN_ARGS)
-$(RUN_ARGS):
+# `make pvm run 8.5 teste.php`: words after `pvm` are pvm arguments, not make targets.
+ifeq (pvm,$(firstword $(MAKECMDGOALS)))
+PVM_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+.PHONY: $(PVM_ARGS)
+$(PVM_ARGS):
 	@:
 endif
 

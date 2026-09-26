@@ -11,7 +11,7 @@ services:
       - ./dist:/src/dist
       - ./.local/bin:/src/.local/bin
 
-  pvm:
+  app-pvm:
     build:
       context: .
       target: runtime
