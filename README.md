@@ -98,22 +98,6 @@ pvm self-upgrade
 pvm self-remove
 ```
 
-## Per-project versions
-
-If a project has a `.php-version` file, `php` switches automatically to that version inside the project directory and its subdirectories:
-
-```sh
-cd ~/code/legacy-app   # contains .php-version with 7.4
-php -v                 # PHP 7.4.x
-pvm current            # Current PHP version: 7.4 (set by ~/code/legacy-app/.php-version)
-pvm which              # /usr/bin/php7.4
-
-PVM_VERSION=8.3 php -v # one-off override
-pvm run 8.2 script.php # run a script with a specific version
-```
-
-`pvm use` without arguments activates the version from `.php-version` globally. Automatic per-directory switching currently works on Linux and macOS. It requires the shim directory in your `PATH` (see below).
-
 ## Requirements
 
 | OS | Requirement |
@@ -148,48 +132,6 @@ pvm self-remove --php  # also remove the PHP versions installed through pvm
 ```
 
 It removes the pvm binary and its data directory and, on Windows, the pvm entries in the user `PATH` and the PowerShell profile. On Windows the PHP versions live in the data directory and are always removed; on Linux and macOS they are system/Homebrew packages and are kept unless you pass `--php`. Run it without `sudo` — if the binary is in a root-owned directory, it prints the `sudo rm` command to finish. See [docs/commands.md](docs/commands.md#pvm-self-remove) for details.
-
-### Manual uninstall
-
-For pvm versions without `self-remove`. First, optionally remove the PHP versions installed through pvm (on Linux and macOS they stay installed otherwise):
-
-```sh
-pvm list
-pvm remove 8.3         # repeat for each version
-```
-
-The paths below assume the default data directory; if you set `PVM_HOME`, remove that directory instead.
-
-#### Linux / macOS
-
-```sh
-sudo rm -f /usr/local/bin/pvm
-rm -rf ~/.pvm
-```
-
-Then delete the `export PATH="$HOME/.pvm/..."` line from `~/.bashrc` / `~/.zshrc` and open a new terminal.
-
-#### Windows (PowerShell)
-
-```powershell
-$bin  = "$env:LOCALAPPDATA\Programs\pvm"
-$data = "$env:LOCALAPPDATA\pvm"
-Remove-Item -Recurse -Force $bin, $data -ErrorAction SilentlyContinue
-
-# remove both directories from the user PATH
-$shims = "$data\shims"
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-$newPath = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $bin -and $_ -ne $shims }) -join ';'
-[Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-
-# remove the pvm-wrapper block that `pvm use` added to your PowerShell profile
-if (Test-Path $PROFILE) {
-  $content = (Get-Content $PROFILE -Raw) -replace '(?s)\r?\n# pvm-wrapper.*?# end pvm-wrapper\r?\n?', ''
-  [IO.File]::WriteAllText($PROFILE, $content)
-}
-```
-
-Open a new terminal afterwards.
 
 ## Build
 
