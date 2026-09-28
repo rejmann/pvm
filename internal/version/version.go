@@ -69,3 +69,37 @@ func (v Version) Compare(other Version) int {
 func (v Version) HasPatch() bool {
 	return v.hasPatch
 }
+
+// Branch is the major.minor part, e.g. "8.3" for 8.3.30.
+func (v Version) Branch() string {
+	return strconv.Itoa(v.Major) + "." + strconv.Itoa(v.Minor)
+}
+
+// Branch returns the major.minor part of s ("8.3.30" → "8.3"), or s itself
+// when it is not a valid version.
+func Branch(s string) string {
+	v, err := Parse(s)
+	if err != nil {
+		return s
+	}
+	return v.Branch()
+}
+
+// Compare orders two version strings for sorting: by version, then textually
+// ("8.3" before "8.3.0"). Strings that are not versions sort first.
+func Compare(a, b string) int {
+	va, errA := Parse(a)
+	vb, errB := Parse(b)
+	switch {
+	case errA != nil && errB != nil:
+		return strings.Compare(a, b)
+	case errA != nil:
+		return -1
+	case errB != nil:
+		return 1
+	}
+	if c := va.Compare(vb); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
+}

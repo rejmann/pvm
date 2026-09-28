@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
+
+	"github.com/rejmann/pvm/internal/httpx"
 )
 
 const (
@@ -42,7 +42,7 @@ func New() *Updater {
 	return &Updater{
 		APIURL:      DefaultAPIURL,
 		DownloadURL: DefaultDownloadPrefixURL,
-		Client:      &http.Client{Timeout: 5 * time.Minute},
+		Client:      httpx.NewClient(httpx.DownloadTimeout),
 		GOOS:        runtime.GOOS,
 		GOARCH:      runtime.GOARCH,
 	}
@@ -50,27 +50,11 @@ func New() *Updater {
 
 // LatestTag returns the tag of the latest published release (e.g. v1.2.0).
 func (u *Updater) LatestTag(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.APIURL+"/releases/latest", nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := u.Client.Do(req)
+	release, err := httpx.GetJSON[struct {
+		TagName string `json:"tag_name"`
+	}](ctx, u.Client, u.APIURL+"/releases/latest", 1<<20, http.Header{"Accept": {"application/vnd.github+json"}})
 	if err != nil {
 		return "", fmt.Errorf("fetch latest release: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch latest release: unexpected status code: %d", resp.StatusCode)
-	}
-
-	var release struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", fmt.Errorf("decode latest release: %w", err)
 	}
 	if release.TagName == "" {
 		return "", errors.New("latest release has no tag")
@@ -99,25 +83,10 @@ func (u *Updater) Download(ctx context.Context, tag string) ([]byte, error) {
 	asset := AssetName(u.GOOS, u.GOARCH)
 	url := fmt.Sprintf("%s/%s/%s", u.DownloadURL, tag, asset)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := u.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download %s: %w", asset, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
+	archive, err := httpx.Get(ctx, u.Client, url, maxBinarySize, nil)
+	if httpx.IsNotFound(err) {
 		return nil, fmt.Errorf("release %s has no build for %s/%s (%s)", tag, u.GOOS, u.GOARCH, asset)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s: unexpected status code: %d", asset, resp.StatusCode)
-	}
-
-	archive, err := io.ReadAll(io.LimitReader(resp.Body, maxBinarySize))
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", asset, err)
 	}

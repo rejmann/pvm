@@ -7,15 +7,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/proc"
+	"github.com/rejmann/pvm/internal/resolve"
 	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
 )
 
-var RunCmd = &cobra.Command{
-	Use:   "run [-v version | version] <file> [args...]",
-	Short: "Run a PHP file with a specific installed version (default: the version in use)",
-	Long: `Run a PHP file with a specific installed version, without changing the
+func newRunCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run [-v version | version] <file> [args...]",
+		Short: "Run a PHP file with a specific installed version (default: the version in use)",
+		Long: `Run a PHP file with a specific installed version, without changing the
 global or project version. The file can be given directly or with -f/--file;
 the arguments after it are passed to the script.
 
@@ -26,14 +29,15 @@ the global version).
 
 PVM_VERSION is set for the php process, so tools it starts that call php
 (e.g. Composer or scripts with #!/usr/bin/env php) use the same version.`,
-	Example: `  pvm run 8.5 script.php
+		Example: `  pvm run 8.5 script.php
   pvm run 8.2 --file script.php arg1 arg2
   pvm run --version 8.2 script.php
   pvm run -v lts script.php
   pvm run lts script.php
   pvm run script.php       # version in use`,
-	DisableFlagParsing: true,
-	RunE:               runRun,
+		DisableFlagParsing: true,
+		RunE:               runRun,
+	}
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
@@ -54,21 +58,21 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	installed, bin, err := runResolve(
+	target, err := runResolve(
 		versionArg,
-		phpfs.NewManager(baseDir()),
-		phpLTSResolver{ctx: cmd.Context()},
+		home.Default(),
+		ltsResolver{ctx: cmd.Context()},
 		dir,
-		os.Getenv(envVersion),
+		os.Getenv(resolve.EnvVersion),
 	)
 	if err != nil {
 		return err
 	}
 
-	if err := os.Setenv(envVersion, installed); err != nil {
+	if err := os.Setenv(resolve.EnvVersion, target.Version); err != nil {
 		return err
 	}
-	return execBinary(bin, rest)
+	return proc.Exec(target.Binary, rest)
 }
 
 // splitRunArgs separates the optional version from the php arguments. The
@@ -158,44 +162,14 @@ func checkRunFile(rest []string, dir string) error {
 
 // runResolve returns the version and binary to run: versionArg when given,
 // otherwise the version in use for dir.
-func runResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, env string) (installed, bin string, err error) {
+func runResolve(versionArg string, h *home.Dir, r version.Resolver, dir, env string) (resolve.Target, error) {
 	if versionArg != "" {
-		return runTarget(versionArg, m, r)
+		return resolve.Version(h, versionArg, r)
 	}
 
-	a, err := resolveActive(m, dir, env)
-	if errors.Is(err, ErrNoActiveVersion) {
-		return "", "", fmt.Errorf("%w — pass one (pvm run 8.3 ...) or run: pvm use <version>", err)
+	t, err := resolve.Active(h, dir, env)
+	if errors.Is(err, resolve.ErrNoActiveVersion) {
+		return t, fmt.Errorf("%w — pass one (pvm run 8.3 ...) or run: pvm use <version>", err)
 	}
-	if err != nil {
-		return "", "", err
-	}
-	return a.Version, a.Binary, nil
-}
-
-// runTarget resolves arg (a version, branch or "lts") to an installed
-// version and its php binary.
-func runTarget(arg string, m *phpfs.Manager, r version.Resolver) (installed, bin string, err error) {
-	concrete, _, err := version.Resolve(arg, r)
-	if err != nil {
-		return "", "", err
-	}
-
-	if _, err := version.Parse(concrete); err != nil {
-		return "", "", fmt.Errorf("invalid version %q: %w", concrete, err)
-	}
-
-	installed, ok := m.MatchInstalled(concrete)
-	if !ok {
-		return "", "", fmt.Errorf("PHP %s is not installed — run: pvm install %s", concrete, concrete)
-	}
-
-	bin, err = m.GetVersionBinary(installed)
-	if err != nil {
-		return "", "", err
-	}
-	if bin == "" {
-		return "", "", errors.New("empty binary path for PHP " + installed)
-	}
-	return installed, bin, nil
+	return t, err
 }

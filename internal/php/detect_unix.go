@@ -2,15 +2,11 @@
 
 package php
 
-import (
-	"runtime"
-
-	"github.com/rejmann/pvm/internal/system"
-)
+import "runtime"
 
 func platformGlobs() []string {
 	switch runtime.GOOS {
-	case system.Darwin:
+	case "darwin":
 		return darwinGlobs()
 	default:
 		return linuxGlobs()

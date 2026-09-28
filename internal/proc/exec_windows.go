@@ -1,0 +1,27 @@
+//go:build windows
+
+package proc
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+)
+
+// Exec runs bin with inherited stdio and exits with its exit code.
+func Exec(bin string, args []string) error {
+	c := exec.Command(bin, args...)
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+
+	err := c.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.ExitCode())
+	}
+	if err != nil {
+		return fmt.Errorf("run %s: %w", bin, err)
+	}
+	os.Exit(0)
+	return nil
+}

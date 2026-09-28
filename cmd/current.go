@@ -6,16 +6,19 @@ import (
 	"io"
 	"os"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
-var CurrentCmd = &cobra.Command{
-	Use:     "current [cur]",
-	Aliases: []string{"cur"},
-	Short:   "Show the currently active PHP version",
-	Args:    cobra.NoArgs,
-	RunE:    runCurrent,
+func newCurrentCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "current [cur]",
+		Aliases: []string{"cur"},
+		Short:   "Show the currently active PHP version",
+		Args:    cobra.NoArgs,
+		RunE:    runCurrent,
+	}
 }
 
 func runCurrent(cmd *cobra.Command, args []string) error {
@@ -23,13 +26,13 @@ func runCurrent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printCurrent(phpfs.NewManager(baseDir()), dir, os.Getenv(envVersion), cmd.OutOrStdout())
+	return printCurrent(home.Default(), dir, os.Getenv(resolve.EnvVersion), cmd.OutOrStdout())
 }
 
-func printCurrent(m *phpfs.Manager, dir, env string, out io.Writer) error {
-	a, err := resolveActive(m, dir, env)
+func printCurrent(h *home.Dir, dir, env string, out io.Writer) error {
+	a, err := resolve.Active(h, dir, env)
 	if err != nil {
-		if errors.Is(err, ErrNoActiveVersion) {
+		if errors.Is(err, resolve.ErrNoActiveVersion) {
 			fmt.Fprintln(out, "No PHP version is currently active.")
 			return nil
 		}

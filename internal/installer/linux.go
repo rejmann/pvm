@@ -1,13 +1,18 @@
-//go:build linux || darwin
+//go:build linux
 
 package installer
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/proc"
+	"github.com/rejmann/pvm/internal/version"
 )
 
 const (
@@ -26,7 +31,7 @@ type pkgManagerDef struct {
 	phpBin      func(branch string) string
 	installArgs func(pkg string) []string
 	removeArgs  func(pkg string) []string
-	preInstall  func(branch string) error
+	preInstall  func(branch string, s proc.Streams) error
 	// extraPkgs are extensions Composer needs that the -cli package leaves out
 	// (zip, to extract packages without unzip on the system). Best effort: a
 	// failure only prints a warning.
@@ -45,17 +50,15 @@ var packageManagers = []pkgManagerDef{
 		removeArgs: func(pkg string) []string {
 			return []string{pmApt, "remove", "-y", pkg}
 		},
-		preInstall: func(branch string) error {
+		preInstall: func(branch string, s proc.Streams) error {
 			pkg := "php" + branch + "-cli"
-			if isInstallable(pkg, pmApt, "-s", "install", pkg) {
+			if proc.Quiet(pmApt, "-s", "install", pkg) == nil {
 				return nil
 			}
-			fmt.Println("Package not found, adding ondrej/php PPA...")
-			add := exec.Command("sudo", "add-apt-repository", "-y", "ppa:ondrej/php")
-			add.Stdout, add.Stderr = os.Stdout, os.Stderr
+			fmt.Fprintln(s.Out, "Package not found, adding ondrej/php PPA...")
 			// add-apt-repository already runs apt-get update; a second update
 			// right after it can fail on the apt lists lock.
-			if err := add.Run(); err != nil {
+			if err := s.Run("sudo", "add-apt-repository", "-y", "ppa:ondrej/php"); err != nil {
 				return fmt.Errorf("add-apt-repository: %w", err)
 			}
 			return nil
@@ -72,16 +75,14 @@ var packageManagers = []pkgManagerDef{
 		removeArgs: func(pkg string) []string {
 			return []string{pmDnf, "remove", "-y", pkg}
 		},
-		preInstall: func(branch string) error {
+		preInstall: func(branch string, s proc.Streams) error {
 			pkg := "php" + branch + "-php-cli"
-			if isInstallable(pkg, pmDnf, "info", pkg) {
+			if proc.Quiet(pmDnf, "info", pkg) == nil {
 				return nil
 			}
-			fmt.Println("Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", pmDnf, "install", "-y",
+			fmt.Fprintln(s.Out, "Package not found, adding Remi repository...")
+			return s.Run("sudo", pmDnf, "install", "-y",
 				"https://rpms.remirepo.net/fedora/remi-release-$(rpm -E %fedora).rpm")
-			remi.Stdout, remi.Stderr = os.Stdout, os.Stderr
-			return remi.Run()
 		},
 	},
 	{
@@ -95,16 +96,14 @@ var packageManagers = []pkgManagerDef{
 		removeArgs: func(pkg string) []string {
 			return []string{pmYum, "remove", "-y", pkg}
 		},
-		preInstall: func(branch string) error {
+		preInstall: func(branch string, s proc.Streams) error {
 			pkg := "php" + branch + "-php-cli"
-			if isInstallable(pkg, pmYum, "info", pkg) {
+			if proc.Quiet(pmYum, "info", pkg) == nil {
 				return nil
 			}
-			fmt.Println("Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", pmYum, "install", "-y",
+			fmt.Fprintln(s.Out, "Package not found, adding Remi repository...")
+			return s.Run("sudo", pmYum, "install", "-y",
 				"https://rpms.remirepo.net/enterprise/remi-release-$(rpm -E %rhel).rpm")
-			remi.Stdout, remi.Stderr = os.Stdout, os.Stderr
-			return remi.Run()
 		},
 	},
 	{
@@ -133,6 +132,8 @@ var packageManagers = []pkgManagerDef{
 	},
 }
 
+var errNoPackageManager = errors.New("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+
 func detectPackageManager() *pkgManagerDef {
 	for i := range packageManagers {
 		if _, err := exec.LookPath(packageManagers[i].bin); err == nil {
@@ -142,65 +143,53 @@ func detectPackageManager() *pkgManagerDef {
 	return nil
 }
 
-func isInstallable(pkg string, args ...string) bool {
-	return exec.Command(args[0], args[1:]...).Run() == nil
-}
-
-func LinuxInstall(base, ver string) error {
+// Install installs PHP ver with the system package manager and returns its
+// php binary.
+func Install(ctx context.Context, h *home.Dir, ver string, s proc.Streams) (string, error) {
 	pm := detectPackageManager()
 	if pm == nil {
-		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+		return "", errNoPackageManager
 	}
 
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	pkg := pm.phpPkg(branch)
 
 	if pm.preInstall != nil {
-		if err := pm.preInstall(branch); err != nil {
-			return fmt.Errorf("prepare repository: %w", err)
+		if err := pm.preInstall(branch, s); err != nil {
+			return "", fmt.Errorf("prepare repository: %w", err)
 		}
 	}
 
-	cmd := exec.Command("sudo", pm.installArgs(pkg)...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("install PHP %s via %s: %w", ver, pm.bin, err)
+	if err := s.Run("sudo", pm.installArgs(pkg)...); err != nil {
+		return "", fmt.Errorf("install PHP %s via %s: %w", ver, pm.bin, err)
 	}
 
-	if err := installExtras(pm, branch); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v. PHP works, but Composer will need unzip or 7z to extract packages; pvm composer offers to retry.\n", err)
+	if err := installExtras(pm, branch, s); err != nil {
+		fmt.Fprintf(s.Err, "Warning: %v. PHP works, but Composer will need unzip or 7z to extract packages; pvm composer offers to retry.\n", err)
 	}
 
-	binPath := pm.phpBin(branch)
-	if _, err := os.Stat(binPath); err != nil {
-		return fmt.Errorf("PHP binary not found at %s after installation", binPath)
+	bin := pm.phpBin(branch)
+	if _, err := os.Stat(bin); err != nil {
+		return "", fmt.Errorf("PHP binary not found at %s after installation", bin)
 	}
-
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return bin, nil
 }
 
-func LinuxRemove(base, ver string) error {
+func Remove(h *home.Dir, ver string, s proc.Streams) error {
 	pm := detectPackageManager()
 	if pm == nil {
-		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+		return errNoPackageManager
 	}
 
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	pkg := pm.phpPkg(branch)
 
 	// Extras first, and quietly: they may never have been installed.
 	for _, extra := range extras(pm, branch) {
-		exec.Command("sudo", pm.removeArgs(extra)...).Run()
+		proc.Quiet("sudo", pm.removeArgs(extra)...)
 	}
 
-	cmd := exec.Command("sudo", pm.removeArgs(pkg)...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := s.Run("sudo", pm.removeArgs(pkg)...); err != nil {
 		return fmt.Errorf("remove PHP %s via %s: %w", ver, pm.bin, err)
 	}
 	return nil
@@ -213,14 +202,12 @@ func extras(pm *pkgManagerDef, branch string) []string {
 	return pm.extraPkgs(branch)
 }
 
-// installExtras installs pm's extra packages one by one. LinuxInstall only
-// warns on failure: PHP itself is already installed and works without them.
-func installExtras(pm *pkgManagerDef, branch string) error {
+// installExtras installs pm's extra packages one by one. Install only warns
+// on failure: PHP itself is already installed and works without them.
+func installExtras(pm *pkgManagerDef, branch string, s proc.Streams) error {
 	var failed []string
 	for _, pkg := range extras(pm, branch) {
-		cmd := exec.Command("sudo", pm.installArgs(pkg)...)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := s.Run("sudo", pm.installArgs(pkg)...); err != nil {
 			failed = append(failed, pkg)
 		}
 	}
@@ -230,14 +217,15 @@ func installExtras(pm *pkgManagerDef, branch string) error {
 	return nil
 }
 
-// LinuxEnsureExtensions installs the extra packages for an installed version.
-func LinuxEnsureExtensions(base, ver string) error {
+// EnsureExtensions adds the extensions pvm installs alongside PHP (zip, for
+// Composer) to an already installed version.
+func EnsureExtensions(h *home.Dir, ver string, s proc.Streams) error {
 	pm := detectPackageManager()
 	if pm == nil {
-		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+		return errNoPackageManager
 	}
 	if pm.extraPkgs == nil {
 		return fmt.Errorf("pvm cannot add PHP extensions with %s", pm.bin)
 	}
-	return installExtras(pm, majorMinor(ver))
+	return installExtras(pm, version.Branch(ver), s)
 }

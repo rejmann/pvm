@@ -1,13 +1,14 @@
+// Package php asks php binaries about themselves: which ones exist outside
+// pvm (DetectSystem) and what a given binary is (Probe).
 package php
 
 import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 
-	"github.com/rejmann/pvm/internal/system"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -34,7 +35,7 @@ func DetectSystem() []SystemInstall {
 	}
 
 	phpBin := "php"
-	if runtime.GOOS == system.Windows {
+	if runtime.GOOS == "windows" {
 		phpBin = "php.exe"
 	}
 	if plain, err := exec.LookPath(phpBin); err == nil {
@@ -50,13 +51,8 @@ func DetectSystem() []SystemInstall {
 		results = append(results, SystemInstall{Version: v, Binary: bin})
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		a, errA := version.Parse(results[i].Version)
-		b, errB := version.Parse(results[j].Version)
-		if errA != nil || errB != nil {
-			return results[i].Version < results[j].Version
-		}
-		return a.Compare(b) < 0
+	slices.SortFunc(results, func(a, b SystemInstall) int {
+		return version.Compare(a.Version, b.Version)
 	})
 	return results
 }

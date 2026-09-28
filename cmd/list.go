@@ -4,32 +4,32 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/php"
-	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/spf13/cobra"
-
-	phpfs "github.com/rejmann/pvm/internal/fs"
 )
 
-var ListCmd = &cobra.Command{
-	Use:     "list [ls]",
-	Aliases: []string{"ls"},
-	Short:   "List installed PHP versions",
-	Args:    cobra.NoArgs,
-	RunE:    runList,
+func newListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list [ls]",
+		Aliases: []string{"ls"},
+		Short:   "List installed PHP versions",
+		Args:    cobra.NoArgs,
+		RunE:    runList,
+	}
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	return listVersions(phpfs.NewManager(baseDir()), cmd.OutOrStdout())
+	return listVersions(home.Default(), cmd.OutOrStdout())
 }
 
-func listVersions(m *phpfs.Manager, out io.Writer) error {
-	managed, err := m.InstalledVersions()
+func listVersions(h *home.Dir, out io.Writer) error {
+	managed, err := h.InstalledVersions()
 	if err != nil {
 		return fmt.Errorf("read installed versions: %w", err)
 	}
 
-	current, _ := symlink.GetCurrent(m.Base)
+	current, _ := h.Current()
 
 	managedSet := map[string]bool{}
 	for _, v := range managed {
@@ -50,10 +50,8 @@ func listVersions(m *phpfs.Manager, out io.Writer) error {
 		printed = true
 	}
 
-	system := php.DetectSystem()
-
 	var unmanaged []php.SystemInstall
-	for _, s := range system {
+	for _, s := range php.DetectSystem() {
 		if !managedSet[s.Version] {
 			unmanaged = append(unmanaged, s)
 		}

@@ -4,19 +4,27 @@ package installer
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/httpx"
+	"github.com/rejmann/pvm/internal/proc"
 )
 
-func downloadAndExtractPHP(ver, destDir string) error {
+// maxZipSize guards against an unexpectedly large download.
+const maxZipSize = 500 << 20
+
+var downloadClient = httpx.NewClient(httpx.DownloadTimeout)
+
+func downloadAndExtractPHP(ctx context.Context, ver, destDir string, s proc.Streams) error {
 	var lastErr error
 	for _, url := range candidateURLs(ver) {
-		fmt.Printf("Trying %s\n", url)
-		if err := downloadExtract(url, destDir); err != nil {
+		fmt.Fprintf(s.Out, "Trying %s\n", url)
+		if err := downloadExtract(ctx, url, destDir); err != nil {
 			lastErr = err
 			continue
 		}
@@ -44,17 +52,7 @@ func candidateURLs(ver string) []string {
 	return urls
 }
 
-func downloadExtract(url, destDir string) error {
-	resp, err := http.Get(url) //nolint:gosec
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, url)
-	}
-
+func downloadExtract(ctx context.Context, url, destDir string) error {
 	tmp, err := os.CreateTemp("", "pvm-php-*.zip")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
@@ -62,9 +60,9 @@ func downloadExtract(url, destDir string) error {
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
+	if err := httpx.Download(ctx, downloadClient, url, tmp, maxZipSize); err != nil {
 		tmp.Close()
-		return fmt.Errorf("download: %w", err)
+		return fmt.Errorf("download %s: %w", url, err)
 	}
 	tmp.Close()
 

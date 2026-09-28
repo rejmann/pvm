@@ -1,7 +1,7 @@
 // Package composer gives each pvm-managed PHP version its own composer.phar
 // and Composer home, downloaded on demand from getcomposer.org.
 //
-// Layout under <pvm-home>/composer:
+// Everything lives in one directory (home.Dir.ComposerDir), laid out as:
 //
 //	cache/                       COMPOSER_CACHE_DIR, shared: downloads don't depend on PHP
 //	php/<version>/composer.phar  the Composer this PHP version runs
@@ -24,12 +24,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
+	"github.com/rejmann/pvm/internal/httpx"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -52,37 +51,34 @@ var (
 	devKey []byte
 )
 
-func dir(base string) string {
-	return filepath.Join(base, "composer")
-}
-
-// VersionDir holds everything Composer keeps for one pvm-managed PHP version.
-func VersionDir(base, phpVersion string) string {
-	return filepath.Join(dir(base), "php", phpVersion)
+// VersionDir holds everything Composer keeps for one pvm-managed PHP version;
+// dir is the Composer directory of the pvm home.
+func VersionDir(dir, phpVersion string) string {
+	return filepath.Join(dir, "php", phpVersion)
 }
 
 // PharPath is the composer.phar that PHP phpVersion (as installed by pvm, e.g. "8.3") runs.
-func PharPath(base, phpVersion string) string {
-	return filepath.Join(VersionDir(base, phpVersion), PharName)
+func PharPath(dir, phpVersion string) string {
+	return filepath.Join(VersionDir(dir, phpVersion), PharName)
 }
 
-func homeDir(base, phpVersion string) string {
-	return filepath.Join(VersionDir(base, phpVersion), "home")
+func homeDir(dir, phpVersion string) string {
+	return filepath.Join(VersionDir(dir, phpVersion), "home")
 }
 
 // Remove deletes the Composer of a PHP version; called when pvm removes it.
-func Remove(base, phpVersion string) error {
-	return os.RemoveAll(VersionDir(base, phpVersion))
+func Remove(dir, phpVersion string) error {
+	return os.RemoveAll(VersionDir(dir, phpVersion))
 }
 
 // Env returns the variables that keep Composer's home (per PHP version) and
 // cache under the pvm home instead of the user's global directories. A
 // variable the user already set (getenv returns non-empty) is left alone.
-func Env(base, phpVersion string, getenv func(string) string) map[string]string {
+func Env(dir, phpVersion string, getenv func(string) string) map[string]string {
 	env := map[string]string{}
 	for name, path := range map[string]string{
-		"COMPOSER_HOME":      homeDir(base, phpVersion),
-		"COMPOSER_CACHE_DIR": filepath.Join(dir(base), "cache"),
+		"COMPOSER_HOME":      homeDir(dir, phpVersion),
+		"COMPOSER_CACHE_DIR": filepath.Join(dir, "cache"),
 	} {
 		if getenv(name) == "" {
 			env[name] = path
@@ -136,7 +132,7 @@ func New() *Downloader {
 	return &Downloader{
 		BaseURL:   DefaultBaseURL,
 		PublicKey: tagsKey,
-		Client:    &http.Client{Timeout: 5 * time.Minute},
+		Client:    httpx.NewClient(httpx.DownloadTimeout),
 	}
 }
 
@@ -145,8 +141,8 @@ func New() *Downloader {
 // for phpExact is downloaded, its signature verified, and the Composer home
 // prepared; onDownload, if not nil, is told which release before the download.
 // An existing phar is never replaced: updating it is `composer self-update`'s job.
-func (d *Downloader) Ensure(ctx context.Context, base, phpVersion, phpExact string, onDownload func(Release)) (string, error) {
-	path := PharPath(base, phpVersion)
+func (d *Downloader) Ensure(ctx context.Context, dir, phpVersion, phpExact string, onDownload func(Release)) (string, error) {
+	path := PharPath(dir, phpVersion)
 	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
 		return path, nil
 	}
@@ -174,7 +170,7 @@ func (d *Downloader) Ensure(ctx context.Context, base, phpVersion, phpExact stri
 		return "", err
 	}
 
-	if err := writeKeys(homeDir(base, phpVersion)); err != nil {
+	if err := writeKeys(homeDir(dir, phpVersion)); err != nil {
 		return "", fmt.Errorf("prepare Composer home: %w", err)
 	}
 	if err := writeAtomic(path, phar, 0755); err != nil {
@@ -250,27 +246,7 @@ func writeKeys(home string) error {
 }
 
 func (d *Downloader) get(ctx context.Context, url string, limit int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := d.Client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(body)) > limit {
-		return nil, errors.New("response too large")
-	}
-	return body, nil
+	return httpx.Get(ctx, d.Client, url, limit, nil)
 }
 
 // writeAtomic writes data next to path and renames it into place, so an

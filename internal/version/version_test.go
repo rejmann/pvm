@@ -2,6 +2,7 @@ package version
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -65,5 +66,28 @@ func TestCompare(t *testing.T) {
 		if got := a.Compare(b); got != tt.want {
 			t.Errorf("Compare(%s, %s) = %d, want %d", tt.a, tt.b, got, tt.want)
 		}
+	}
+}
+
+func TestBranch(t *testing.T) {
+	tests := map[string]string{
+		"8.3.30": "8.3",
+		"8.3":    "8.3",
+		"8":      "8",
+		"lts":    "lts",
+	}
+	for in, want := range tests {
+		if got := Branch(in); got != want {
+			t.Errorf("Branch(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCompareStrings(t *testing.T) {
+	vs := []string{"8.10", "garbage", "7.4", "8.3.0", "8.3", "8.2"}
+	slices.SortFunc(vs, Compare)
+	want := []string{"garbage", "7.4", "8.2", "8.3", "8.3.0", "8.10"}
+	if !slices.Equal(vs, want) {
+		t.Errorf("sorted = %v, want %v", vs, want)
 	}
 }

@@ -1,0 +1,68 @@
+package catalog
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+const cacheTTL = 24 * time.Hour
+
+type branchCache struct {
+	CachedAt time.Time `json:"cached_at"`
+	Branches []Branch  `json:"branches"`
+}
+
+func availableCacheFile(cacheDir string) string {
+	return filepath.Join(cacheDir, "available.json")
+}
+
+func readCache(cacheDir string) ([]Branch, bool) {
+	data, err := os.ReadFile(availableCacheFile(cacheDir))
+	if err != nil {
+		return nil, false
+	}
+	var c branchCache
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, false
+	}
+	if time.Since(c.CachedAt) > cacheTTL {
+		return nil, false
+	}
+	// Caches written before branches were sorted keep a random order.
+	sortBranches(c.Branches)
+	return c.Branches, true
+}
+
+func writeCache(cacheDir string, branches []Branch) error {
+	path := availableCacheFile(cacheDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(branchCache{
+		CachedAt: time.Now(),
+		Branches: branches,
+	})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// FetchAllBranchesCached is FetchAllBranches with its result kept in cacheDir
+// for a day; forceRefresh skips the cache.
+func FetchAllBranchesCached(ctx context.Context, cacheDir string, forceRefresh bool) ([]Branch, error) {
+	if !forceRefresh {
+		if branches, ok := readCache(cacheDir); ok {
+			return branches, nil
+		}
+	}
+	branches, err := FetchAllBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_ = writeCache(cacheDir, branches)
+	return branches, nil
+}
