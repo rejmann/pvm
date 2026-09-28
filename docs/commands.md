@@ -195,7 +195,7 @@ Arguments:
 
 1. Validates the version string format.
 2. Fails if the version is not installed.
-3. Removes the version files/directory.
+3. Removes the version files/directory, and that version's Composer (`<pvm-home>/composer/php/<version>/`, see [`pvm composer`](#pvm-composer-args)).
 4. If the removed version was active, clears `current-version` and prints a warning:
    ```
    Warning: PHP 8.3 was the active version. No version is now active.
@@ -287,7 +287,7 @@ pvm run script.php       # version in use in this directory
 
 ## `pvm composer [args...]`
 
-Runs Composer with the pvm-managed PHP version in use in the current directory. Nothing is installed or configured globally — no `composer` on `PATH`, no shell exports: pvm downloads `composer.phar` the first time it is needed and keeps it, and Composer's config and cache, in the pvm home.
+Runs Composer with the pvm-managed PHP version in use in the current directory. Nothing is installed or configured globally — no `composer` on `PATH`, no shell exports. Each PHP version gets its own Composer, downloaded the first time it is needed and kept in the pvm home, so nothing done with one version's Composer can break another.
 
 ```
 pvm composer [args...]
@@ -310,22 +310,42 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
 ### What it does
 
 1. Picks the PHP version like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global. Unlike the shim, it never falls back to a system `php` pvm does not manage: with nothing selected it fails with `no PHP version selected — run: pvm use <version>`.
-2. Asks that php binary for its exact version and whether the `zip` extension is loaded, and chooses the Composer line that supports the version:
-
-   | PHP | Composer | Stored at |
-   |-----|----------|-----------|
-   | 7.2.5 or newer | latest stable | `<pvm-home>/composer/latest-stable/composer.phar` |
-   | 5.3.2 – 7.2.4 | 2.2 LTS | `<pvm-home>/composer/latest-2.2.x/composer.phar` |
-   | older | — error | — |
+2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and whether the `zip` extension is loaded.
 
 3. If `zip` is not loaded and neither `unzip` nor `7z` is on `PATH`, Composer could not extract packages, so pvm says so. In a terminal it asks `Install it now? [y/N]` and, on yes, installs the extension for that version the same way `pvm install` does (apt/dnf/yum package; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` do not need `zip`. Without a terminal (CI, pipes) it only prints the notice.
-4. If that `composer.phar` is missing, downloads it from `getcomposer.org/download/<line>/composer.phar`, checks it against the published `.sha256` and saves it atomically. A notice goes to stderr, so stdout stays Composer's own.
+4. If this PHP version has no `composer.phar` yet:
+   - reads [getcomposer.org/versions](https://getcomposer.org/versions) and picks the newest stable release whose minimum PHP the exact version meets — the same rule `composer self-update` follows. Today that is 2.10.x for PHP 7.2.5+ and the 2.2 LTS for PHP 5.3–7.2.4; when Composer raises its minimum, pvm follows without an update;
+   - downloads `getcomposer.org/download/<version>/composer.phar` and verifies its RSA-SHA384 signature (`.sig`) with Composer's release key, embedded in pvm — a corrupted or tampered file is rejected and nothing is saved;
+   - saves it atomically and writes Composer's public keys into the version's Composer home, where `self-update` and `diagnose` expect them.
+
+   `Downloading Composer 2.10.3 for PHP 8.3...` goes to stderr, so stdout stays Composer's own. An existing phar is never replaced by pvm: updating it is `pvm composer self-update`'s job.
 5. Sets, for the Composer process only:
    - `PVM_VERSION=<version>`, so scripts Composer runs that call `php` use the same version;
-   - `COMPOSER_HOME=<pvm-home>/composer/home` (config, `auth.json`, global packages) and `COMPOSER_CACHE_DIR=<pvm-home>/composer/cache`, instead of `~/.config/composer` and `~/.cache/composer`. If you already set either variable, yours is kept.
+   - `COMPOSER_HOME=<pvm-home>/composer/php/<version>/home` and `COMPOSER_CACHE_DIR=<pvm-home>/composer/cache`, instead of `~/.config/composer` and `~/.cache/composer`. If you already set either variable, yours is kept.
 6. Replaces itself with `php composer.phar args...` (Windows: runs it as a child), so stdin, stdout, signals and the exit code are Composer's.
 
-The same `composer.phar` is shared by every PHP version on its line; Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. `pvm composer self-update` updates the stored phar in place. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm self-remove` deletes the phars, config and cache with the data directory.
+### One Composer per PHP version
+
+```
+<pvm-home>/composer/
+├── cache/                      shared download cache (packages don't depend on PHP)
+└── php/
+    ├── 8.3/
+    │   ├── composer.phar
+    │   └── home/               COMPOSER_HOME: config.json, auth.json, global packages,
+    │                           self-update backups, public keys
+    └── 5.6/
+        ├── composer.phar       (2.2 LTS)
+        └── home/
+```
+
+Everything but the download cache is per version, because each of these depends on the PHP running Composer:
+
+- **`self-update`** replaces only that version's phar, and Composer itself never picks a release its PHP cannot run. `self-update --2.2`, `--1` or `--rollback` in an 8.5 project leave 8.3 and 5.6 untouched; rollback only sees that version's own backups.
+- **`global require`** installs tools resolved for that PHP, so a tool installed with 8.5 is never run by 7.4. They land in `home/vendor/bin` (not on `PATH`); run them with `pvm composer global exec <tool>`.
+- **`auth.json` / `config.json`** are per version too — set a token with `pvm composer config --global ...` for each version that needs it, or export `COMPOSER_HOME` yourself to share one home.
+
+Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm remove <version>` deletes that version's Composer; `pvm self-remove` deletes everything with the data directory.
 
 ---
 

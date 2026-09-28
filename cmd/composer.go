@@ -22,10 +22,13 @@ var ComposerCmd = &cobra.Command{
 directory ($PVM_VERSION, the nearest .php-version, then the global version).
 Every argument is passed to Composer unchanged, including -h, -V and --.
 
-Nothing is installed globally: pvm downloads composer.phar from getcomposer.org
-the first time it is needed, and Composer's config, auth and cache live in the
-pvm home too (unless COMPOSER_HOME / COMPOSER_CACHE_DIR are set). PHP 7.2.5 and
-newer use the latest Composer; PHP 5.3.2 to 7.2.4 use the Composer 2.2 LTS.
+Nothing is installed globally. Each PHP version gets its own composer.phar —
+the newest Composer that supports it, downloaded from getcomposer.org the first
+time it is needed and verified with Composer's signing key — and its own
+Composer home (config, auth.json, global packages), all in the pvm home. So
+self-update, --rollback or global require for one version never affect another.
+Only the download cache is shared. COMPOSER_HOME / COMPOSER_CACHE_DIR, if set,
+are respected. pvm remove deletes a version's Composer with it.
 
 If the PHP version lacks the zip extension and neither unzip nor 7z is
 available, pvm offers to install the extension for that version.
@@ -59,23 +62,18 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	channel, err := composer.Channel(info.Version)
-	if err != nil {
-		return err
-	}
-
 	if !info.Zip && !hasArchiveTool(os.Getenv("PATH")) {
 		offerZipExtension(base, a.Version, isTerminal(os.Stdin), os.Stdin, os.Stderr)
 	}
 
-	phar, err := composer.New().Ensure(cmd.Context(), base, channel, func() {
-		fmt.Fprintf(os.Stderr, "Downloading Composer (%s) for PHP %s...\n", channel, info.Version)
+	phar, err := composer.New().Ensure(cmd.Context(), base, a.Version, info.Version, func(r composer.Release) {
+		fmt.Fprintf(os.Stderr, "Downloading Composer %s for PHP %s...\n", r.Version, a.Version)
 	})
 	if err != nil {
 		return err
 	}
 
-	env := composer.Env(base, os.Getenv)
+	env := composer.Env(base, a.Version, os.Getenv)
 	env[envVersion] = a.Version
 	for k, v := range env {
 		if err := os.Setenv(k, v); err != nil {
@@ -95,7 +93,7 @@ type phpInfo struct {
 const probeScript = `echo "\n", PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION, ".", PHP_RELEASE_VERSION, "\n", extension_loaded("zip") ? 1 : 0;`
 
 // probePHP asks the php binary for its exact version, since pvm may only know
-// the branch (8.3) and Composer's requirement is a patch (7.2.5), and whether
+// the branch (8.3) and Composer's minimum PHP is a patch (7.2.5), and whether
 // it can extract zip archives. php.ini is loaded, as Composer will load it.
 func probePHP(bin string) (phpInfo, error) {
 	out, err := exec.Command(bin, "-r", probeScript).Output()

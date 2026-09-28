@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/rejmann/pvm/internal/composer"
 )
 
 func TestRemoveVersion(t *testing.T) {
@@ -30,6 +32,24 @@ func TestRemoveVersion(t *testing.T) {
 		}
 		if errOut.Len() != 0 {
 			t.Errorf("no warning expected for inactive version, got %q", errOut.String())
+		}
+	})
+
+	t.Run("removes only that version's Composer", func(t *testing.T) {
+		m := newManager(t)
+		fakeInstall(t, m, "8.2")
+		mkdirAll(t, composer.VersionDir(m.Base, "8.2"))
+		mkdirAll(t, composer.VersionDir(m.Base, "8.3"))
+		remove := func(_, _ string) error { return nil }
+
+		if err := removeVersion("8.2", m, remove, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(composer.VersionDir(m.Base, "8.2")); !os.IsNotExist(err) {
+			t.Errorf("Composer of 8.2 should be gone, stat err = %v", err)
+		}
+		if _, err := os.Stat(composer.VersionDir(m.Base, "8.3")); err != nil {
+			t.Errorf("Composer of 8.3 must stay: %v", err)
 		}
 	})
 
