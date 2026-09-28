@@ -1,8 +1,0 @@
-#!/bin/sh
-# Usage: build <goos> <goarch> <output>
-# Compiles pvm with the version from `git describe` (or "dev").
-set -e
-
-version="$(git -c safe.directory='*' describe --tags --always --dirty 2>/dev/null || echo dev)"
-GOOS="$1" GOARCH="$2" go build -ldflags "-s -w -X main.version=$version" -o "$3" .
-echo "  built $3 ($version)"

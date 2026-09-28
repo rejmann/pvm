@@ -29,7 +29,6 @@ func main() {
 		cmd.CurrentCmd,
 		cmd.WhichCmd,
 		cmd.RunCmd,
-		cmd.ComposerCmd,
 		cmd.ShimCmd,
 		cmd.SelfUpgradeCmd,
 		cmd.SelfRemoveCmd,

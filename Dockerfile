@@ -1,25 +1,19 @@
 FROM golang:1.27-alpine AS source
 
-# The code is not copied in: compose mounts the project at /src, so a code
-# change never needs an image rebuild. Modules and build cache live in .local/.
-RUN apk add --no-cache git su-exec
-ENV GOPATH=/src/.local/go \
-    GOCACHE=/src/.local/go-cache \
-    GOFLAGS=-modcacherw \
-    HOME=/tmp
-COPY cli/go-entrypoint /usr/local/bin/go-entrypoint
 WORKDIR /src
-ENTRYPOINT ["sh", "/usr/local/bin/go-entrypoint"]
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY main.go ./
+COPY cmd ./cmd
+COPY internal ./internal
 
 FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-     sudo ca-certificates \
-     software-properties-common \
-     gpg-agent \
-     zip \
-     unzip \
+     sudo ca-certificates software-properties-common gpg-agent \
     && rm -rf /var/lib/apt/lists/* \
     && rm /etc/apt/apt.conf.d/docker-clean
 

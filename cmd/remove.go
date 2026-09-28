@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rejmann/pvm/internal/composer"
 	phpfs "github.com/rejmann/pvm/internal/fs"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/symlink"
@@ -50,10 +49,6 @@ func removeVersion(arg string, m *phpfs.Manager, remove RemoverFunc, out, errOut
 
 	if err := m.RemoveVersionDir(arg); err != nil {
 		return fmt.Errorf("remove PHP %s metadata: %w", arg, err)
-	}
-
-	if err := composer.Remove(m.Base, arg); err != nil {
-		fmt.Fprintf(errOut, "Warning: could not remove Composer for PHP %s: %v\n", arg, err)
 	}
 
 	if isCurrent {

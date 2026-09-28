@@ -1,7 +1,5 @@
 # Architecture
 
-For the end-to-end flow across commands — lifecycle, state files and platform differences — see [flow.md](flow.md). This document covers packages and code-level data flow.
-
 ## Package layout
 
 ```
@@ -16,7 +14,6 @@ pvm/
 │   ├── remove.go                # `pvm remove` command
 │   ├── which.go                 # `pvm which` command
 │   ├── run.go                   # `pvm run` — run a PHP file with a specific version
-│   ├── composer.go              # `pvm composer` — run composer.phar with the version in use
 │   ├── shim.go                  # hidden `pvm shim php` — entry point of the php shim
 │   ├── self_upgrade.go          # `pvm self-upgrade` — replaces pvm with a GitHub release
 │   ├── self_remove.go           # `pvm self-remove` — uninstalls pvm
@@ -36,9 +33,6 @@ pvm/
     │   ├── detect_windows.go    # Windows: scan registry for PHP
     │   ├── util.go              # Version string parsing helpers
     │   └── http_request.go      # Generic HTTP client with JSON decoding
-    ├── composer/
-    │   ├── composer.go          # per-PHP Composer: release choice (/versions), download, signature check, Env()
-    │   └── keys/                # Composer's public keys (embedded): release signatures, Composer home
     ├── fs/
     │   ├── manager.go           # Manager — wraps pvm home directory structure
     │   ├── binary.go            # Read/write binary path; VersionInstalled check
@@ -50,7 +44,6 @@ pvm/
     │   ├── brew.go              # macOS: Homebrew
     │   ├── windows.go           # Windows: download from windows.php.net
     │   ├── windows_download.go  # HTTP download + zip extraction helpers
-    │   ├── phpini.go            # writePHPIni(): php.ini with openssl + zip for Windows builds
     │   └── util.go              # majorMinor() version helper
     ├── symlink/
     │   ├── get.go               # GetCurrent() — reads current-version file
@@ -79,12 +72,6 @@ pvm/
 ```
 ~/.pvm/                        (or $PVM_HOME)
 ├── current-version            # plain text: "8.3" — written by pvm use
-├── composer/                  # created by `pvm composer`
-│   ├── cache/                 # COMPOSER_CACHE_DIR, shared
-│   └── php/
-│       └── 8.3/               # one per PHP version; removed by pvm remove
-│           ├── composer.phar  # newest Composer supporting this PHP
-│           └── home/          # COMPOSER_HOME: config, auth.json, global packages, backups
 ├── bin/
 │   └── php                    # shim script → `pvm shim php` (Linux)
 ├── shims/
@@ -101,13 +88,11 @@ pvm/
 ```
 %LOCALAPPDATA%\pvm\            (or %PVM_HOME%)
 ├── current-version            # plain text: "8.3"
-├── composer\                  # same layout as Linux / macOS
 ├── shims\
 │   └── php.bat                # batch shim → active php.exe
 ├── php\
 │   ├── 8.3\                   # extracted from windows.php.net zip
 │   │   ├── php.exe
-│   │   ├── php.ini            # written by pvm: extension_dir + openssl, zip
 │   │   └── ...
 │   └── 8.4\
 │       ├── php.exe
@@ -147,7 +132,6 @@ cmd.runInstall
        │         ├─ apt-get → adds ondrej/php PPA
        │         └─ dnf/yum → adds Remi repo
        │    └─ sudo <pm> install <php-pkg>   ← package name varies by distro
-       │    └─ installExtras()               ← apt/dnf/yum: zip extension, warning on failure
        ├─ macOS:   BrewInstall()
        │    └─ brew install php@X.Y
        └─ Windows: WindowsInstall()
@@ -155,7 +139,6 @@ cmd.runInstall
             └─ downloadAndExtractPHP()
                  └─ tries windows.php.net/releases/ then /archives/
                  └─ extracts zip to %LOCALAPPDATA%\pvm\php\<branch>\
-            └─ writePHPIni()                 ← php.ini-production + extension_dir, openssl, zip
             └─ write versions/<ver>/binary = <installDir>\php.exe
 ```
 
@@ -216,23 +199,6 @@ cmd.runList
        └─ execBinary()                       ← syscall.Exec, so pvm is replaced by php
 ```
 
-## Data flow — `pvm composer`
-
-```
-cmd.runComposer
-  └─ cmd.resolveActive(base, cwd, $PVM_VERSION)      ← pvm-managed only, no system php
-  └─ probePHP() → php -r '…'                          ← exact version + extension_loaded("zip")
-  └─ no zip and no unzip/7z on PATH?
-       └─ offerZipExtension() → terminal: confirm → installer.EnsureExtensions()
-  └─ composer.Downloader.Ensure(base, installed, exact)
-       └─ composer/php/<installed>/composer.phar missing?
-            └─ GET getcomposer.org/versions → SelectRelease(): newest with min-php ≤ exact
-            └─ GET /download/<ver>/composer.phar + .sig → RSA-SHA384 with embedded key
-            └─ writeKeys(home) + temp file + rename into composer/php/<installed>/
-  └─ composer.Env() → COMPOSER_HOME=composer/php/<installed>/home, COMPOSER_CACHE_DIR=composer/cache (unless set)
-  └─ execBinary(php, [composer.phar, args...])       ← PVM_VERSION set for child processes
-```
-
 ## Data flow — `pvm current` / `pvm which`
 
 ```
@@ -274,6 +240,4 @@ cmd.runSelfRemove
 - **`binary` file** — stores only the resolved binary path, keeping version detection O(1) (one file read + stat).
 - **Concurrent branch fetching** — `FetchAllBranches` fans out one goroutine per active major version, reducing latency when php.net is slow.
 - **`current-version` file** — plain-text file tracking the global version; used by `pvm list` and as the shim's fallback. On Linux it is complementary to `update-alternatives`, which keeps `/usr/bin/php` pointing at the global version for services that do not use the shim.
-- **Composer downloaded on demand, not installed globally** — `pvm composer` fetches `composer.phar` into the pvm home on first use instead of at pvm install time, so users who never run Composer never download it, and no `composer` binary competes with one already on `PATH`. Composer's config and cache go under the pvm home too, so everything pvm brings in is removed by `pvm remove` / `pvm self-remove`, and `pvm composer` only runs PHP versions pvm manages.
-- **One Composer per PHP version** — the phar, `self-update` backups and global packages all depend on the PHP running Composer, so sharing them lets one version break another (a `self-update` under 8.5 to a Composer that 7.4 cannot run, a `--rollback` restoring another version's backup, global tools resolved for the wrong PHP). Each version gets its own phar and `COMPOSER_HOME`; only the PHP-independent download cache is shared. The release is chosen from getcomposer.org/versions by `min-php`, as `self-update` does, instead of a hard-coded PHP → Composer table, and verified with Composer's signing key.
 - **Dynamic shim instead of a symlink** — the Unix shim is a tiny `sh` script that calls `pvm shim php`, so the version is picked per call from `PVM_VERSION`/`.php-version`/global. pvm then `exec`s the real binary, adding ~2 ms and keeping signals, stdin and the exit code intact. The shim embeds pvm's absolute path and is regenerated by `pvm use`.
