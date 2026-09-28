@@ -72,27 +72,3 @@ func fakeExecutable(t *testing.T, dir, name string) string {
 	}
 	return p
 }
-
-func TestPHPTargetReportsVersion(t *testing.T) {
-	m := newManager(t)
-	fakeInstall(t, m, "8.3.12")
-	setGlobal(t, m.Base, "8.3")
-
-	installed, bin, err := phpTarget(m, t.TempDir(), "", t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, _ := m.GetVersionBinary("8.3.12")
-	if installed != "8.3.12" || bin != want {
-		t.Errorf("phpTarget = (%q, %q), want (%q, %q)", installed, bin, "8.3.12", want)
-	}
-
-	sys := fakeExecutable(t, t.TempDir(), "php")
-	installed, bin, err = phpTarget(newManager(t), t.TempDir(), "", filepath.Dir(sys))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if installed != "" || bin != sys {
-		t.Errorf("system fallback = (%q, %q), want (\"\", %q)", installed, bin, sys)
-	}
-}

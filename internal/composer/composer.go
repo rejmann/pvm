@@ -54,9 +54,29 @@ func Channel(phpVersion string) (string, error) {
 	}
 }
 
+func dir(base string) string {
+	return filepath.Join(base, "composer")
+}
+
 // PharPath is where composer.phar for channel lives under the pvm home.
 func PharPath(base, channel string) string {
-	return filepath.Join(base, "composer", channel, PharName)
+	return filepath.Join(dir(base), channel, PharName)
+}
+
+// Env returns the variables that keep Composer's config, auth and cache under
+// the pvm home instead of the user's global directories. A variable the user
+// already set (getenv returns non-empty) is left alone.
+func Env(base string, getenv func(string) string) map[string]string {
+	env := map[string]string{}
+	for name, path := range map[string]string{
+		"COMPOSER_HOME":      filepath.Join(dir(base), "home"),
+		"COMPOSER_CACHE_DIR": filepath.Join(dir(base), "cache"),
+	} {
+		if getenv(name) == "" {
+			env[name] = path
+		}
+	}
+	return env
 }
 
 // Downloader fetches composer.phar from DownloadURL; tests point it at an

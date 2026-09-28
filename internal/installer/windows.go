@@ -69,3 +69,14 @@ func resolveFullVersion(ver, branch string) (string, error) {
 func phpInstallDir(base, branch string) string {
 	return filepath.Join(base, "php", branch)
 }
+
+// WindowsEnsureExtensions writes php.ini for an installed version that has
+// none. An existing php.ini is the user's: pvm only says what to add.
+func WindowsEnsureExtensions(base, ver string) error {
+	installDir := phpInstallDir(base, majorMinor(ver))
+	iniPath := filepath.Join(installDir, "php.ini")
+	if _, err := os.Stat(iniPath); err == nil {
+		return fmt.Errorf("%s already exists — add this to it:\n%s", iniPath, pvmIniBlock(installDir))
+	}
+	return writePHPIni(installDir)
+}

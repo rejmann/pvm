@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -113,4 +114,24 @@ func TestEnsureErrors(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+}
+
+func TestEnv(t *testing.T) {
+	base := t.TempDir()
+
+	got := Env(base, func(string) string { return "" })
+	if got["COMPOSER_HOME"] != filepath.Join(base, "composer", "home") ||
+		got["COMPOSER_CACHE_DIR"] != filepath.Join(base, "composer", "cache") {
+		t.Errorf("Env = %v", got)
+	}
+
+	got = Env(base, func(name string) string {
+		if name == "COMPOSER_HOME" {
+			return "/custom"
+		}
+		return ""
+	})
+	if _, ok := got["COMPOSER_HOME"]; ok || len(got) != 1 {
+		t.Errorf("Env overrides a variable the user set: %v", got)
+	}
 }

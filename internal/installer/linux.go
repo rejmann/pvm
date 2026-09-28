@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -166,7 +167,9 @@ func LinuxInstall(base, ver string) error {
 		return fmt.Errorf("install PHP %s via %s: %w", ver, pm.bin, err)
 	}
 
-	installExtras(pm, branch)
+	if err := installExtras(pm, branch); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v. PHP works, but Composer will need unzip or 7z to extract packages; pvm composer offers to retry.\n", err)
+	}
 
 	binPath := pm.phpBin(branch)
 	if _, err := os.Stat(binPath); err != nil {
@@ -210,14 +213,31 @@ func extras(pm *pkgManagerDef, branch string) []string {
 	return pm.extraPkgs(branch)
 }
 
-// installExtras installs pm's extra packages one by one, warning instead of
-// failing: PHP itself is already installed and works without them.
-func installExtras(pm *pkgManagerDef, branch string) {
+// installExtras installs pm's extra packages one by one. LinuxInstall only
+// warns on failure: PHP itself is already installed and works without them.
+func installExtras(pm *pkgManagerDef, branch string) error {
+	var failed []string
 	for _, pkg := range extras(pm, branch) {
 		cmd := exec.Command("sudo", pm.installArgs(pkg)...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not install %s (%v); Composer will need unzip or 7z to extract packages.\n", pkg, err)
+			failed = append(failed, pkg)
 		}
 	}
+	if len(failed) > 0 {
+		return fmt.Errorf("could not install %s via %s", strings.Join(failed, ", "), pm.bin)
+	}
+	return nil
+}
+
+// LinuxEnsureExtensions installs the extra packages for an installed version.
+func LinuxEnsureExtensions(base, ver string) error {
+	pm := detectPackageManager()
+	if pm == nil {
+		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+	}
+	if pm.extraPkgs == nil {
+		return fmt.Errorf("pvm cannot add PHP extensions with %s", pm.bin)
+	}
+	return installExtras(pm, majorMinor(ver))
 }

@@ -44,25 +44,18 @@ func runShim(cmd *cobra.Command, args []string) error {
 // shimTarget returns the php binary the shim should run. When no version is
 // selected anywhere, it falls back to the first php on PATH outside pvm.
 func shimTarget(m *phpfs.Manager, dir, env, path string) (string, error) {
-	_, bin, err := phpTarget(m, dir, env, path)
-	return bin, err
-}
-
-// phpTarget is shimTarget plus the pvm version it picked; installed is empty
-// when it fell back to the system php.
-func phpTarget(m *phpfs.Manager, dir, env, path string) (installed, bin string, err error) {
 	a, err := resolveActive(m, dir, env)
 	if err == nil {
-		return a.Version, a.Binary, nil
+		return a.Binary, nil
 	}
 	if !errors.Is(err, ErrNoActiveVersion) {
-		return "", "", err
+		return "", err
 	}
 
 	if bin := lookPathExcluding("php", path, symlink.ShimDir(m.Base)); bin != "" {
-		return "", bin, nil
+		return bin, nil
 	}
-	return "", "", fmt.Errorf("%w and no system php found — run: pvm use <version>", err)
+	return "", fmt.Errorf("%w and no system php found — run: pvm use <version>", err)
 }
 
 // lookPathExcluding is exec.LookPath restricted to PATH entries other than skip.

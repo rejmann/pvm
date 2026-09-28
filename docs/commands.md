@@ -92,7 +92,7 @@ pvm detects the available package manager automatically on Linux.
 - **pacman / zypper** — the packages are left as they are.
 - **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_openssl.dll` / `php_zip.dll` (each only if its DLL is in `ext\`). An existing `php.ini` is never overwritten.
 
-Versions installed before this existed are not changed — reinstall them (`pvm remove` + `pvm install`) to get the extensions.
+For a version that lacks `zip` anyway (installed before pvm did this, or the package failed), `pvm composer` offers to add it — see [below](#pvm-composer-args).
 
 ### Windows install directory
 
@@ -287,7 +287,7 @@ pvm run script.php       # version in use in this directory
 
 ## `pvm composer [args...]`
 
-Runs Composer with the PHP version in use in the current directory. Composer is not installed globally: pvm downloads `composer.phar` the first time it is needed.
+Runs Composer with the pvm-managed PHP version in use in the current directory. Nothing is installed or configured globally — no `composer` on `PATH`, no shell exports: pvm downloads `composer.phar` the first time it is needed and keeps it, and Composer's config and cache, in the pvm home.
 
 ```
 pvm composer [args...]
@@ -309,8 +309,8 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
 
 ### What it does
 
-1. Picks the php binary like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global → first `php` on `PATH` outside pvm.
-2. Asks that binary for its exact version and chooses the Composer line that supports it:
+1. Picks the PHP version like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global. Unlike the shim, it never falls back to a system `php` pvm does not manage: with nothing selected it fails with `no PHP version selected — run: pvm use <version>`.
+2. Asks that php binary for its exact version and whether the `zip` extension is loaded, and chooses the Composer line that supports the version:
 
    | PHP | Composer | Stored at |
    |-----|----------|-----------|
@@ -318,11 +318,14 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
    | 5.3.2 – 7.2.4 | 2.2 LTS | `<pvm-home>/composer/latest-2.2.x/composer.phar` |
    | older | — error | — |
 
-3. If that `composer.phar` is missing, downloads it from `getcomposer.org/download/<line>/composer.phar`, checks it against the published `.sha256` and saves it atomically. A notice goes to stderr, so stdout stays Composer's own.
-4. Sets `PVM_VERSION=<version>` (when the version is pvm-managed), so scripts Composer runs that call `php` use the same version.
-5. Replaces itself with `php composer.phar args...` (Windows: runs it as a child), so stdin, stdout, signals and the exit code are Composer's.
+3. If `zip` is not loaded and neither `unzip` nor `7z` is on `PATH`, Composer could not extract packages, so pvm says so. In a terminal it asks `Install it now? [y/N]` and, on yes, installs the extension for that version the same way `pvm install` does (apt/dnf/yum package; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` do not need `zip`. Without a terminal (CI, pipes) it only prints the notice.
+4. If that `composer.phar` is missing, downloads it from `getcomposer.org/download/<line>/composer.phar`, checks it against the published `.sha256` and saves it atomically. A notice goes to stderr, so stdout stays Composer's own.
+5. Sets, for the Composer process only:
+   - `PVM_VERSION=<version>`, so scripts Composer runs that call `php` use the same version;
+   - `COMPOSER_HOME=<pvm-home>/composer/home` (config, `auth.json`, global packages) and `COMPOSER_CACHE_DIR=<pvm-home>/composer/cache`, instead of `~/.config/composer` and `~/.cache/composer`. If you already set either variable, yours is kept.
+6. Replaces itself with `php composer.phar args...` (Windows: runs it as a child), so stdin, stdout, signals and the exit code are Composer's.
 
-The same `composer.phar` is shared by every PHP version on its line; Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. `pvm composer self-update` updates the stored phar in place. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm self-remove` deletes the stored phars with the data directory.
+The same `composer.phar` is shared by every PHP version on its line; Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. `pvm composer self-update` updates the stored phar in place. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm self-remove` deletes the phars, config and cache with the data directory.
 
 ---
 
