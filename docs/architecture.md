@@ -1,5 +1,7 @@
 # Architecture
 
+For the end-to-end flow across commands — lifecycle, state files and platform differences — see [flow.md](flow.md). This document covers packages and code-level data flow.
+
 ## Package layout
 
 ```

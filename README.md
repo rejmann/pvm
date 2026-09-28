@@ -153,6 +153,7 @@ make test
 
 | Doc | Description |
 |-----|-------------|
+| [docs/flow.md](docs/flow.md) | End-to-end flow: lifecycle, state files, version resolution, Composer, per-OS differences |
 | [docs/architecture.md](docs/architecture.md) | Package layout and data flow |
 | [docs/commands.md](docs/commands.md) | CLI command reference |
 | [docs/development.md](docs/development.md) | Adding commands and installers |

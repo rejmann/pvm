@@ -64,10 +64,11 @@ pvm install 8.3.30    # installs a specific patch version
 
 1. Resolves `lts` alias to the highest supported branch name.
 2. Validates the version string format.
-3. Skips installation if the version is already installed.
+3. Fails with `<version> already installed` if it is.
 4. Runs the OS-appropriate installer (see below).
 5. Writes the resolved binary path to `<pvm-home>/versions/<ver>/binary`.
-6. Prints a PATH hint if the pvm shim directory is not yet in `$PATH`.
+
+Installing does not activate the version — run `pvm use`, add a `.php-version`, or use `pvm run`. See [flow.md](flow.md) for how the commands fit together.
 
 ### OS backends
 
