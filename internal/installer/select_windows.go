@@ -27,7 +27,7 @@ func Remove(base, ver string) error {
 	}
 }
 
-// EnsureExtensions writes the php.ini that enables openssl and zip for an
+// EnsureExtensions writes the php.ini that enables openssl and Extensions for an
 // already installed version (e.g. one installed before pvm wrote php.ini).
 func EnsureExtensions(base, ver string) error {
 	switch runtime.GOOS {

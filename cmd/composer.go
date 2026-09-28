@@ -30,8 +30,9 @@ self-update, --rollback or global require for one version never affect another.
 Only the download cache is shared. COMPOSER_HOME / COMPOSER_CACHE_DIR, if set,
 are respected. pvm remove deletes a version's Composer with it.
 
-If the PHP version lacks the zip extension and neither unzip nor 7z is
-available, pvm offers to install the extension for that version.
+If the PHP version lacks an extension pvm installs alongside PHP (curl,
+mbstring, xml, zip — zip only when neither unzip nor 7z is available), pvm
+offers to install them for that version.
 
 PVM_VERSION is set for the process, so scripts Composer runs that call php
 use the same version.`,
@@ -62,8 +63,8 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !info.Zip && !hasArchiveTool(os.Getenv("PATH")) {
-		offerZipExtension(base, a.Version, isTerminal(os.Stdin), os.Stdin, os.Stderr)
+	if missing := neededExtensions(info.Missing, os.Getenv("PATH")); len(missing) > 0 {
+		offerExtensions(base, a.Version, missing, isTerminal(os.Stdin), os.Stdin, os.Stderr)
 	}
 
 	phar, err := composer.New().Ensure(cmd.Context(), base, a.Version, info.Version, func(r composer.Release) {
@@ -84,19 +85,27 @@ func runComposer(cmd *cobra.Command, args []string) error {
 }
 
 type phpInfo struct {
-	Version string // exact version, e.g. "8.3.12"
-	Zip     bool   // zip extension loaded
+	Version string   // exact version, e.g. "8.3.12"
+	Missing []string // installer.Extensions that are not loaded
 }
 
-// probeScript prints the version and whether zip is loaded on the last two
-// lines, so startup warnings printed before them are ignored.
-const probeScript = `echo "\n", PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION, ".", PHP_RELEASE_VERSION, "\n", extension_loaded("zip") ? 1 : 0;`
+// probeScript prints the version and the missing installer.Extensions
+// (comma-separated, after "missing:") on the last two lines, so startup
+// warnings printed before them are ignored.
+func probeScript() string {
+	return `$m = array();
+foreach (array('` + strings.Join(installer.Extensions, "', '") + `') as $e) {
+	if (!extension_loaded($e)) { $m[] = $e; }
+}
+echo "\n", PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION, ".", PHP_RELEASE_VERSION, "\nmissing:", implode(",", $m);`
+}
 
 // probePHP asks the php binary for its exact version, since pvm may only know
-// the branch (8.3) and Composer's minimum PHP is a patch (7.2.5), and whether
-// it can extract zip archives. php.ini is loaded, as Composer will load it.
+// the branch (8.3) and Composer's minimum PHP is a patch (7.2.5), and which of
+// the extensions pvm installs are not loaded. php.ini is loaded, as Composer
+// will load it.
 func probePHP(bin string) (phpInfo, error) {
-	out, err := exec.Command(bin, "-r", probeScript).Output()
+	out, err := exec.Command(bin, "-r", probeScript()).Output()
 	if err != nil {
 		return phpInfo{}, fmt.Errorf("run %s: %w", bin, err)
 	}
@@ -108,10 +117,28 @@ func parseProbe(out string) (phpInfo, error) {
 	if len(lines) < 2 {
 		return phpInfo{}, fmt.Errorf("unexpected php output: %q", out)
 	}
-	return phpInfo{
-		Version: strings.TrimSpace(lines[len(lines)-2]),
-		Zip:     strings.TrimSpace(lines[len(lines)-1]) == "1",
-	}, nil
+	missing, ok := strings.CutPrefix(strings.TrimSpace(lines[len(lines)-1]), "missing:")
+	if !ok {
+		return phpInfo{}, fmt.Errorf("unexpected php output: %q", out)
+	}
+	info := phpInfo{Version: strings.TrimSpace(lines[len(lines)-2])}
+	if missing != "" {
+		info.Missing = strings.Split(missing, ",")
+	}
+	return info, nil
+}
+
+// neededExtensions drops zip from missing when unzip or 7z on path can
+// extract packages instead.
+func neededExtensions(missing []string, path string) []string {
+	var needed []string
+	for _, ext := range missing {
+		if ext == "zip" && hasArchiveTool(path) {
+			continue
+		}
+		needed = append(needed, ext)
+	}
+	return needed
 }
 
 // hasArchiveTool reports whether Composer can extract zips without the PHP
@@ -125,22 +152,24 @@ func hasArchiveTool(path string) bool {
 	return false
 }
 
-// offerZipExtension asks to install the zip extension for version. It never
-// fails the command: Composer still runs, and only package extraction needs zip.
-func offerZipExtension(base, version string, interactive bool, in io.Reader, out io.Writer) {
-	fmt.Fprintf(out, "PHP %s has no zip extension, which Composer needs to extract packages.\n", version)
+// offerExtensions asks to install the extensions pvm installs alongside PHP
+// for version, which lacks missing. It never fails the command: Composer
+// still runs, and only some commands and packages need them.
+func offerExtensions(base, version string, missing []string, interactive bool, in io.Reader, out io.Writer) {
+	fmt.Fprintf(out, "PHP %s is missing the %s extension(s), which Composer and most packages need.\n",
+		version, strings.Join(missing, ", "))
 	if !interactive {
-		fmt.Fprintln(out, "Run pvm composer in a terminal to let pvm install it.")
+		fmt.Fprintln(out, "Run pvm composer in a terminal to let pvm install them.")
 		return
 	}
-	if !confirm(in, out, "Install it now? [y/N] ") {
+	if !confirm(in, out, "Install them now? [y/N] ") {
 		return
 	}
 	if err := installer.EnsureExtensions(base, version); err != nil {
 		fmt.Fprintf(out, "Warning: %v\n", err)
 		return
 	}
-	fmt.Fprintf(out, "zip extension installed for PHP %s.\n", version)
+	fmt.Fprintf(out, "Extensions installed for PHP %s.\n", version)
 }
 
 // isTerminal is false for pipes and redirects, including </dev/null (a char

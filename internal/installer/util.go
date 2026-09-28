@@ -9,3 +9,11 @@ func majorMinor(ver string) string {
 	}
 	return ver
 }
+
+// Extensions are the PHP extensions pvm makes sure every version has, so
+// Composer and the usual frameworks (Symfony, Laravel) work out of the box:
+// zip extracts packages without unzip/7z, curl speeds up downloads, and xml
+// (dom, simplexml, xmlwriter…) and mbstring are required by most packages.
+// Package managers whose PHP package leaves them out get them as extra
+// packages; the Windows php.ini enables them.
+var Extensions = []string{"curl", "mbstring", "xml", "zip"}

@@ -50,7 +50,7 @@ pvm/
     │   ├── brew.go              # macOS: Homebrew
     │   ├── windows.go           # Windows: download from windows.php.net
     │   ├── windows_download.go  # HTTP download + zip extraction helpers
-    │   ├── phpini.go            # writePHPIni(): php.ini with openssl + zip for Windows builds
+    │   ├── phpini.go            # writePHPIni(): php.ini with openssl + Extensions for Windows builds
     │   └── util.go              # majorMinor() version helper
     ├── symlink/
     │   ├── get.go               # GetCurrent() — reads current-version file
@@ -107,7 +107,7 @@ pvm/
 ├── php\
 │   ├── 8.3\                   # extracted from windows.php.net zip
 │   │   ├── php.exe
-│   │   ├── php.ini            # written by pvm: extension_dir + openssl, zip
+│   │   ├── php.ini            # written by pvm: extension_dir + openssl, curl, mbstring, zip
 │   │   └── ...
 │   └── 8.4\
 │       ├── php.exe
@@ -147,7 +147,7 @@ cmd.runInstall
        │         ├─ apt-get → adds ondrej/php PPA
        │         └─ dnf/yum → adds Remi repo
        │    └─ sudo <pm> install <php-pkg>   ← package name varies by distro
-       │    └─ installExtras()               ← apt/dnf/yum: zip extension, warning on failure
+       │    └─ installExtras()               ← apt/dnf/yum: installer.Extensions packages, warning on failure
        ├─ macOS:   BrewInstall()
        │    └─ brew install php@X.Y
        └─ Windows: WindowsInstall()
@@ -155,7 +155,7 @@ cmd.runInstall
             └─ downloadAndExtractPHP()
                  └─ tries windows.php.net/releases/ then /archives/
                  └─ extracts zip to %LOCALAPPDATA%\pvm\php\<branch>\
-            └─ writePHPIni()                 ← php.ini-production + extension_dir, openssl, zip
+            └─ writePHPIni()                 ← php.ini-production + extension_dir, openssl + Extensions
             └─ write versions/<ver>/binary = <installDir>\php.exe
 ```
 
@@ -221,9 +221,9 @@ cmd.runList
 ```
 cmd.runComposer
   └─ cmd.resolveActive(base, cwd, $PVM_VERSION)      ← pvm-managed only, no system php
-  └─ probePHP() → php -r '…'                          ← exact version + extension_loaded("zip")
-  └─ no zip and no unzip/7z on PATH?
-       └─ offerZipExtension() → terminal: confirm → installer.EnsureExtensions()
+  └─ probePHP() → php -r '…'                          ← exact version + installer.Extensions not loaded
+  └─ neededExtensions(): missing, minus zip if unzip/7z on PATH
+       └─ offerExtensions() → terminal: confirm → installer.EnsureExtensions()
   └─ composer.Downloader.Ensure(base, installed, exact)
        └─ composer/php/<installed>/composer.phar missing?
             └─ GET getcomposer.org/versions → SelectRelease(): newest with min-php ≤ exact

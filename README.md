@@ -113,7 +113,7 @@ pvm self-remove
 | macOS | [Homebrew](https://brew.sh) |
 | Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) and pvm writes its `php.ini` |
 
-pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the `zip` extension (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer.
+pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the `curl`, `mbstring`, `xml` and `zip` extensions (and on Windows enables `openssl`), so `pvm composer` — including `create-project` for Symfony or Laravel — needs nothing else on the machine: no `unzip`, `7z` or global Composer.
 
 ## PATH setup
 

@@ -31,14 +31,14 @@ func Remove(base, ver string) error {
 	}
 }
 
-// EnsureExtensions adds the PHP extensions pvm installs alongside PHP (zip,
-// for Composer) to an already installed version.
+// EnsureExtensions adds the PHP extensions pvm installs alongside PHP
+// (Extensions) to an already installed version.
 func EnsureExtensions(base, ver string) error {
 	switch runtime.GOOS {
 	case system.Linux:
 		return LinuxEnsureExtensions(base, ver)
 	case system.Darwin:
-		return nil // Homebrew's php@X.Y already includes zip
+		return nil // Homebrew's php@X.Y already includes them
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}

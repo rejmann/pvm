@@ -27,17 +27,29 @@ type pkgManagerDef struct {
 	installArgs func(pkg string) []string
 	removeArgs  func(pkg string) []string
 	preInstall  func(branch string) error
-	// extraPkgs are extensions Composer needs that the -cli package leaves out
-	// (zip, to extract packages without unzip on the system). Best effort: a
-	// failure only prints a warning.
-	extraPkgs func(branch string) []string
+	// extPkg is the package providing extension ext (one of Extensions),
+	// which the -cli package leaves out, or "" when the PHP package already
+	// includes it. nil: pvm does not add extensions with this package manager.
+	extPkg func(branch, ext string) string
+}
+
+// remiExtPkg names Remi's extension packages; curl is in php-common, which
+// php-cli pulls in.
+func remiExtPkg(branch, ext string) string {
+	switch ext {
+	case "curl":
+		return ""
+	case "zip":
+		return "php" + branch + "-php-pecl-zip"
+	}
+	return "php" + branch + "-php-" + ext
 }
 
 var packageManagers = []pkgManagerDef{
 	{
 		bin:       pmApt,
 		phpPkg:    func(branch string) string { return "php" + branch + "-cli" },
-		extraPkgs: func(branch string) []string { return []string{"php" + branch + "-zip"} },
+		extPkg:    func(branch, ext string) string { return "php" + branch + "-" + ext },
 		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmApt, "install", "-y", pkg}
@@ -64,7 +76,7 @@ var packageManagers = []pkgManagerDef{
 	{
 		bin:       pmDnf,
 		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
-		extraPkgs: func(branch string) []string { return []string{"php" + branch + "-php-pecl-zip"} },
+		extPkg:    remiExtPkg,
 		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmDnf, "install", "-y", pkg}
@@ -87,7 +99,7 @@ var packageManagers = []pkgManagerDef{
 	{
 		bin:       pmYum,
 		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
-		extraPkgs: func(branch string) []string { return []string{"php" + branch + "-php-pecl-zip"} },
+		extPkg:    remiExtPkg,
 		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmYum, "install", "-y", pkg}
@@ -168,7 +180,7 @@ func LinuxInstall(base, ver string) error {
 	}
 
 	if err := installExtras(pm, branch); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v. PHP works, but Composer will need unzip or 7z to extract packages; pvm composer offers to retry.\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: %v. PHP works, but Composer or some packages may fail without them; pvm composer offers to retry.\n", err)
 	}
 
 	binPath := pm.phpBin(branch)
@@ -206,11 +218,18 @@ func LinuxRemove(base, ver string) error {
 	return nil
 }
 
+// extras are the packages that add Extensions to pm's PHP branch.
 func extras(pm *pkgManagerDef, branch string) []string {
-	if pm.extraPkgs == nil {
+	if pm.extPkg == nil {
 		return nil
 	}
-	return pm.extraPkgs(branch)
+	var pkgs []string
+	for _, ext := range Extensions {
+		if pkg := pm.extPkg(branch, ext); pkg != "" {
+			pkgs = append(pkgs, pkg)
+		}
+	}
+	return pkgs
 }
 
 // installExtras installs pm's extra packages one by one. LinuxInstall only
@@ -236,7 +255,7 @@ func LinuxEnsureExtensions(base, ver string) error {
 	if pm == nil {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
 	}
-	if pm.extraPkgs == nil {
+	if pm.extPkg == nil {
 		return fmt.Errorf("pvm cannot add PHP extensions with %s", pm.bin)
 	}
 	return installExtras(pm, majorMinor(ver))

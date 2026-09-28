@@ -81,7 +81,7 @@ Outside `<pvm-home>`, pvm touches only what the platform requires:
 
 | Where | What | Set by | Undone by |
 |-------|------|--------|-----------|
-| Linux system packages | `php<X.Y>-cli` and the zip extension (apt/dnf/yum) | `install` (`sudo`) | `remove`, `self-remove --php` |
+| Linux system packages | `php<X.Y>-cli` and the curl, mbstring, xml, zip extensions (apt/dnf/yum) | `install` (`sudo`) | `remove`, `self-remove --php` |
 | Linux `update-alternatives` | `/usr/bin/php` → the global version, for services that don't use the shim | `use` (`sudo`) | `remove` of the active version (`--auto`) |
 | `~/.local/bin/php` (Linux) | updated **only if it already is a symlink** | `use` | — |
 | Homebrew | `php@X.Y` | `install` | `remove`, `self-remove --php` |
@@ -109,20 +109,20 @@ flowchart TD
     D -- Linux --> L1["detect apt / dnf / yum / pacman / zypper"]
     L1 --> L2["package missing? add ondrej/php PPA (apt) or Remi (dnf/yum)"]
     L2 --> L3["sudo #lt;pm#gt; install php#lt;X.Y#gt;-cli"]
-    L3 --> L4["sudo #lt;pm#gt; install zip extension<br/>(apt/dnf/yum; failure = warning only)"]
+    L3 --> L4["sudo #lt;pm#gt; install curl, mbstring, xml, zip<br/>(apt/dnf/yum; failure = warning only)"]
     L4 --> W
-    D -- macOS --> M1["brew install php@X.Y<br/>(zip and openssl included)"] --> M2["binary = $(brew --prefix php@X.Y)/bin/php"] --> W
+    D -- macOS --> M1["brew install php@X.Y<br/>(extensions included)"] --> M2["binary = $(brew --prefix php@X.Y)/bin/php"] --> W
     D -- Windows --> N1["branch → latest patch (php.net)"]
     N1 --> N2["download NTS x64 zip from windows.php.net<br/>(releases, then archives; vs17 … vc11)"]
     N2 --> N3["extract to #lt;pvm-home#gt;\php\#lt;branch#gt;"]
-    N3 --> N4["write php.ini: php.ini-production +<br/>extension_dir + openssl + zip"]
+    N3 --> N4["write php.ini: php.ini-production +<br/>extension_dir + openssl, curl, mbstring, zip"]
     N4 --> W
     W["write versions/#lt;v#gt;/binary"] --> Z["PHP #lt;v#gt; installed successfully."]
 ```
 
 - The version is recorded as typed after alias resolution: `pvm install 8.3` records `8.3` (the package manager picks the patch); `8.3.30` records `8.3.30`.
 - **Install does not activate anything**: no shim, no `current-version`. Use `pvm use`, a `.php-version`, or `pvm run`.
-- The zip extension (and on Windows the `php.ini`) exists so that `pvm composer` needs nothing else on the machine — see [§3.8](#38-pvm-composer).
+- The extensions (and on Windows the `php.ini`) exist so that `pvm composer` and the usual frameworks need nothing else on the machine — see [§3.8](#38-pvm-composer).
 
 ### 3.3 Activate globally — `pvm use`
 
@@ -209,8 +209,8 @@ Composer is never installed globally and never at `pvm install` time. Each PHP v
 ```mermaid
 flowchart TD
     A["pvm composer #lt;args#gt;"] --> B["resolve version (§3.5)<br/>pvm-managed only"]
-    B --> C["probe php: exact version<br/>+ is the zip extension loaded?"]
-    C --> D{"zip missing and no<br/>unzip / 7z on PATH?"}
+    B --> C["probe php: exact version<br/>+ which of curl, mbstring, xml, zip are missing?"]
+    C --> D{"any missing?<br/>(zip ignored if unzip / 7z on PATH)"}
     D -- yes, terminal --> D1["ask: Install it now? [y/N]<br/>yes → same extension install as pvm install"]
     D -- yes, no terminal --> D2["print notice only"]
     D -- no --> E
@@ -227,17 +227,17 @@ flowchart TD
     H --> I["exec php composer.phar #lt;args#gt;"]
 ```
 
-- **Every Composer command works**: all arguments, including `-h`, `-V` and `--`, go to Composer unchanged; stdout and the exit code are Composer's. pvm's own messages (download, zip notice) go to stderr.
+- **Every Composer command works**: all arguments, including `-h`, `-V` and `--`, go to Composer unchanged; stdout and the exit code are Composer's. pvm's own messages (download, missing-extension notice) go to stderr.
 - **Release choice** follows `composer self-update`'s rule, from Composer's own list — today 2.10.x for PHP ≥ 7.2.5 and the 2.2 LTS for PHP 5.3–7.2.4. When Composer raises its minimum PHP, pvm follows without a new release.
 - **Verification**: a phar whose signature doesn't match Composer's release key is rejected and nothing is saved.
 - **Isolation**: the phar and `COMPOSER_HOME` are per PHP version, so `self-update`, `self-update --2.2`, `--rollback` and `global require` for one version cannot break another. Only the download cache is shared, since packages don't depend on PHP. As a consequence, credentials set with `config --global` (`auth.json`) are per version too; a project `auth.json` or `COMPOSER_AUTH` work for all versions.
 - **Updating Composer** is `pvm composer self-update`; pvm itself never replaces an existing phar.
-- Composer's own requirements still apply: `git` for source installs; extraction is covered by the zip extension from [§3.2](#32-install--pvm-install).
+- Composer's own requirements still apply: `git` for source installs; extraction and the common extensions are covered by [§3.2](#32-install--pvm-install).
 
 ### 3.9 Remove — `pvm remove`
 
 1. The version must be given exactly as installed (see `pvm list`).
-2. Uninstalls it: Linux removes the zip extension, then `php<X.Y>-cli`; macOS `brew uninstall php@X.Y`; Windows deletes `php\<branch>\`.
+2. Uninstalls it: Linux removes the extension packages, then `php<X.Y>-cli`; macOS `brew uninstall php@X.Y`; Windows deletes `php\<branch>\`.
 3. Deletes `versions/<v>/` and `composer/php/<v>/`.
 4. If it was the active global version: Linux runs `update-alternatives --auto php`; Linux/macOS delete `current-version`; a warning says no version is active. **Windows:** `current-version` is currently left in place (removing the global version there is not implemented yet), so `pvm use <other>` should follow.
 
@@ -271,8 +271,8 @@ Linux, starting from nothing:
 | # | Command | Result | State after |
 |---|---------|--------|-------------|
 | 1 | `pvm available` | branch table | `cache/available.json` |
-| 2 | `pvm install 8.3` | apt installs `php8.3-cli`, `php8.3-zip` | `versions/8.3/binary` = `/usr/bin/php8.3` |
-| 3 | `pvm install 7.4` | PPA added, `php7.4-cli`, `php7.4-zip` | `versions/7.4/binary` |
+| 2 | `pvm install 8.3` | apt installs `php8.3-cli`, `php8.3-{curl,mbstring,xml,zip}` | `versions/8.3/binary` = `/usr/bin/php8.3` |
+| 3 | `pvm install 7.4` | PPA added, `php7.4-cli`, `php7.4-{curl,mbstring,xml,zip}` | `versions/7.4/binary` |
 | 4 | `pvm use 8.3` | `/usr/bin/php` → 8.3, PATH hint | `bin/php`, `current-version` = `8.3` |
 | 5 | add `~/.pvm/bin` to `PATH` once | — | shell config (by the user) |
 | 6 | `cd legacy && echo 7.4 > .php-version` | — | project file (by the user) |
@@ -289,7 +289,7 @@ Linux, starting from nothing:
 | | Linux | macOS | Windows |
 |---|---|---|---|
 | PHP comes from | apt / dnf / yum / pacman / zypper (`sudo`) | Homebrew | windows.php.net zip, into `<pvm-home>\php` |
-| Zip extension for Composer | extra package (apt/dnf/yum) | built in | `php.ini` written by pvm |
+| Extensions for Composer (curl, mbstring, xml, zip) | extra packages (apt/dnf/yum) | built in | `php.ini` written by pvm |
 | Shim | `~/.pvm/bin/php` (sh) | `~/.pvm/shims/php` (sh) | `shims\php.bat` |
 | `php` honours `.php-version` / `PVM_VERSION` | yes | yes | no — global only |
 | System `/usr/bin/php` follows `pvm use` | yes (`update-alternatives`) | no | — |

@@ -76,9 +76,9 @@ pvm detects the available package manager automatically on Linux.
 
 | OS / Distro | Backend | Notes |
 |-------------|---------|-------|
-| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + `php<X.Y>-zip` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
-| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
-| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + `php<X.Y>-{curl,mbstring,xml,zip}` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
+| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + `php<X.Y>-php-{mbstring,xml,pecl-zip}` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + `php<X.Y>-php-{mbstring,xml,pecl-zip}` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
 | Linux (Arch) | `pacman -S php` | Only the version in the official repos; no extra repo added |
 | Linux (openSUSE) | `zypper install php<X.Y>` | — |
 | macOS | `brew install php@<X.Y>` | Requires [Homebrew](https://brew.sh) |
@@ -86,14 +86,14 @@ pvm detects the available package manager automatically on Linux.
 
 ### Extensions for Composer
 
-`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) needs — `openssl` for HTTPS and `zip` to extract packages — so nothing else (such as `unzip` or `7z`) has to be installed on the machine:
+`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) and the usual frameworks need — `openssl` for HTTPS, `zip` to extract packages, `curl` for downloads, and `xml` (dom, simplexml, xmlwriter…) and `mbstring`, which Symfony, Laravel and most packages require — so nothing else (such as `unzip` or `7z`) has to be installed on the machine:
 
-- **apt / dnf / yum** — the `-cli` package leaves `zip` out, so pvm installs the zip extension package right after PHP. It is best effort: if the package is missing, PHP is still installed and a warning says Composer will need `unzip` or `7z`. `pvm remove` removes it too.
-- **Homebrew** — `php@X.Y` already includes `openssl` and `zip`.
+- **apt / dnf / yum** — the `-cli` package leaves these out, so pvm installs one package per extension right after PHP (Remi's `php-common` already has `curl`). It is best effort: if a package is missing, PHP is still installed and a warning says so. `pvm remove` removes them too.
+- **Homebrew** — `php@X.Y` already includes all of them.
 - **pacman / zypper** — the packages are left as they are.
-- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_openssl.dll` / `php_zip.dll` (each only if its DLL is in `ext\`). An existing `php.ini` is never overwritten.
+- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=` lines for `openssl`, `curl`, `mbstring` and `zip` (each only if its DLL is in `ext\`; `xml` is compiled in). An existing `php.ini` is never overwritten.
 
-For a version that lacks `zip` anyway (installed before pvm did this, or the package failed), `pvm composer` offers to add it — see [below](#pvm-composer-args).
+For a version that lacks one of them anyway (installed before pvm did this, or a package failed), `pvm composer` offers to add them — see [below](#pvm-composer-args).
 
 ### Windows install directory
 
@@ -311,9 +311,9 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
 ### What it does
 
 1. Picks the PHP version like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global. Unlike the shim, it never falls back to a system `php` pvm does not manage: with nothing selected it fails with `no PHP version selected — run: pvm use <version>`.
-2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and whether the `zip` extension is loaded.
+2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and which of `curl`, `mbstring`, `xml` and `zip` are not loaded.
 
-3. If `zip` is not loaded and neither `unzip` nor `7z` is on `PATH`, Composer could not extract packages, so pvm says so. In a terminal it asks `Install it now? [y/N]` and, on yes, installs the extension for that version the same way `pvm install` does (apt/dnf/yum package; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` do not need `zip`. Without a terminal (CI, pipes) it only prints the notice.
+3. If any is missing, pvm says which — otherwise Composer would fail midway, e.g. `symfony/framework-bundle requires ext-xml` during `create-project`. A missing `zip` is ignored when `unzip` or `7z` is on `PATH`, since Composer can extract with them. In a terminal it asks `Install them now? [y/N]` and, on yes, installs the extensions for that version the same way `pvm install` does (apt/dnf/yum packages; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` need none of them. Without a terminal (CI, pipes) it only prints the notice.
 4. If this PHP version has no `composer.phar` yet:
    - reads [getcomposer.org/versions](https://getcomposer.org/versions) and picks the newest stable release whose minimum PHP the exact version meets — the same rule `composer self-update` follows. Today that is 2.10.x for PHP 7.2.5+ and the 2.2 LTS for PHP 5.3–7.2.4; when Composer raises its minimum, pvm follows without an update;
    - downloads `getcomposer.org/download/<version>/composer.phar` and verifies its RSA-SHA384 signature (`.sig`) with Composer's release key, embedded in pvm — a corrupted or tampered file is rejected and nothing is saved;
