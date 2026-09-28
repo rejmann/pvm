@@ -1,6 +1,17 @@
 # Development Guide
 
-**Go never runs on your machine.** Every `make` target builds, tests or runs pvm inside Docker through [compose.yaml](../compose.yaml), so the only requirements are `make` and Docker Compose — no local Go toolchain. Do not run `go build`, `go test` or `go run` directly.
+**Go never runs on your machine.** Every `make` target builds, tests or runs pvm inside Docker through [compose.yaml](../compose.yaml), so the only requirements are `make` and Docker Compose — no local Go toolchain, git or Unix tools. Do not run `go build`, `go test` or `go run` directly.
+
+The Makefile only calls `docker compose` (and `docker version`, to learn the host OS/arch), with no shell syntax, so it works the same from bash, zsh, PowerShell or `cmd.exe` — on Windows, install Docker Desktop and GNU make (e.g. `winget install GnuWin32.Make` or `choco install make`). Anything that needs a shell lives in [cli/](../cli) and runs inside the containers:
+
+| Script | Runs in | Does |
+|--------|---------|------|
+| `cli/go-entrypoint` | `go` service | creates `dist/` and `.local/`, then runs the command as the owner of the project directory (so outputs are yours, without `id -u` on the host) |
+| `cli/build` | `go` service | `go build` with the version from `git describe` |
+| `cli/pvm` | `app-pvm` container | refreshes `/usr/local/bin/pvm` from the build, then runs `pvm` or `bash` |
+| `cli/help.awk` | `go` service | `make help`: lists every `target: ## description` line of the Makefile |
+
+To document a new target, end its rule with `## description` — `make help` picks it up. `.gitattributes` keeps these scripts with LF line endings on Windows checkouts.
 
 ```sh
 make setup        # build the Docker images (the other targets also run it, cached)
@@ -8,7 +19,7 @@ make setup        # build the Docker images (the other targets also run it, cach
 
 | Target | What it does (all in Docker) |
 |--------|------------------------------|
-| `make setup` | `docker compose build` — images with the current code |
+| `make setup` | `docker compose build` — the Go toolchain and Ubuntu images (code is mounted, not baked in) |
 | `make pvm <args>` | Runs `pvm <args>` in the running Ubuntu container (`pvm` service) |
 | `make shell` | Opens bash in that container |
 | `make up` / `make down` | Starts / removes the container (`down` resets installed PHP versions) |
@@ -36,15 +47,15 @@ make down             # back to a clean container
 
 The container runs a copy of the build at `/usr/local/bin/pvm`, which `make pvm` / `make shell` refresh with `cp -u` — only when `.local/bin/pvm` is newer. That lets `make pvm self-upgrade` replace it with a real release: the upgraded binary stays in use until you change the code (the rebuild is newer, so it is copied back) or run `make down`. Flags after `pvm` need `--` or `ARGS`, since make would parse them itself: `make pvm -- run 8.5 --file teste.php`.
 
-Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted into the container), so after `make down` the next `pvm install` of the same version doesn't download anything again. The files there are created by root inside the container; remove them with `sudo rm -rf .local` if you need to clear the cache.
+Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted into the container), so after `make down` the next `pvm install` of the same version doesn't download anything again. The files there are created by root inside the container; to clear the cache without `sudo`, run `docker compose run --rm --entrypoint rm go -rf .local/apt` (skipping the entrypoint keeps the container as root).
 
-`make pvm` receives its arguments as make goals, so quotes and spaces are lost. For arguments like that, pass them in `ARGS`, which the shell parses normally:
+`make pvm` receives its arguments as make goals, so quotes and spaces are lost. For arguments like that, pass them in `ARGS` (on Windows `cmd.exe`, use double quotes inside: single quotes do not group there):
 
 ```sh
 make pvm ARGS="run 8.5 teste.php 'um argumento com espaços'"
 ```
 
-pvm itself is not baked into the image: `make pvm` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. The binary is only rebuilt when a `.go` file, `go.mod` or `go.sum` changes, and the Go build cache lives in `.local/go-cache`, so an unchanged `make pvm` takes well under a second. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
+pvm itself is not baked into the image: `make pvm` compiles it into `.local/bin/pvm` (gitignored), which the container sees through the project mount. The binary is only rebuilt when a `.go` file, `go.mod` or `go.sum` changes (found with make's own `wildcard`, not `find`), and Go modules and the build cache live in `.local/go` and `.local/go-cache`, so an unchanged `make pvm` takes well under a second. It is built for the architecture of Docker's VM (`docker version`), which is what the container runs. Changing Go code therefore keeps the same container — and the PHP versions installed in it. The container is only recreated when the Dockerfile or `compose.yaml` change, or after `make down`; reinstalling then doesn't download anything thanks to the apt cache.
 
 No Makefile target may touch the pvm installed on your machine: `make test` and `make lint` only compile and test code (tests use `t.TempDir()`), and the `build*` targets only write to `dist/`.
 
@@ -55,15 +66,15 @@ make build        # dist/pvm for your OS/arch
 make build-all    # dist/pvm-linux-amd64, pvm-darwin-arm64, pvm-windows-amd64.exe, ...
 ```
 
-Binaries are compiled by the `go` service, which mounts `./dist` as a volume and runs as your user, so files in `dist/` are owned by you. The version shown by `pvm --version` comes from `git describe` (defaults to `dev`).
+Binaries are compiled by the `go` service, which mounts the project at `/src` and runs as the owner of the project directory, so files in `dist/` are owned by you. The version shown by `pvm --version` comes from `git describe`, run inside the container (defaults to `dev`). `make build` targets the OS/arch of your Docker client (`dist/pvm`, or `dist/pvm.exe` on Windows).
 
 Do not run a `dist/` binary on your machine for commands that change state (`install`, `use`, `remove`) — use `make pvm` instead (see above).
 
-For a one-off Go command that writes to the repo (e.g. `go mod tidy`), run the Go image with the repo mounted instead of a local toolchain:
+For a one-off Go command that writes to the repo (e.g. `go mod tidy`, `go get`), use the `go` service — the repo is mounted and files come out owned by you:
 
 ```sh
-docker run --rm -u "$(id -u):$(id -g)" -e GOCACHE=/tmp/cache -e GOMODCACHE=/tmp/mod \
-  -v "$PWD":/src -w /src golang:1.27-alpine go mod tidy
+docker compose run --rm go go mod tidy
+docker compose run --rm go gofmt -l .
 ```
 
 ## Running tests

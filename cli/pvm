@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs a command in the pvm container (`make pvm`, `make shell`). The container
+# uses a writable copy of the build (so `pvm self-upgrade` works), refreshed
+# only when the build is newer: an upgraded binary sticks until the code changes.
+set -e
+
+cp -u /app/.local/bin/pvm /usr/local/bin/pvm
+exec "$@"
