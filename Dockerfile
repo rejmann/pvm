@@ -13,7 +13,11 @@ FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-     sudo ca-certificates software-properties-common gpg-agent \
+     sudo ca-certificates \
+     software-properties-common \
+     gpg-agent \
+     zip \
+     unzip \
     && rm -rf /var/lib/apt/lists/* \
     && rm /etc/apt/apt.conf.d/docker-clean
 

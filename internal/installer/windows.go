@@ -31,6 +31,9 @@ func WindowsInstall(base, ver string) error {
 	if _, err := os.Stat(binPath); err != nil {
 		return fmt.Errorf("php.exe not found at %s after extraction", binPath)
 	}
+	if err := writePHPIni(installDir); err != nil {
+		return fmt.Errorf("write php.ini: %w", err)
+	}
 
 	verDir := filepath.Join(base, "versions", ver)
 	if err := os.MkdirAll(verDir, 0755); err != nil {

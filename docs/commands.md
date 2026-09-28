@@ -75,13 +75,24 @@ pvm detects the available package manager automatically on Linux.
 
 | OS / Distro | Backend | Notes |
 |-------------|---------|-------|
-| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
-| Linux (Fedora) | `dnf install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
-| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + `php<X.Y>-zip` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
+| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
 | Linux (Arch) | `pacman -S php` | Only the version in the official repos; no extra repo added |
 | Linux (openSUSE) | `zypper install php<X.Y>` | — |
 | macOS | `brew install php@<X.Y>` | Requires [Homebrew](https://brew.sh) |
-| Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | No external dependency |
+| Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | Writes a `php.ini` (see below) |
+
+### Extensions for Composer
+
+`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) needs — `openssl` for HTTPS and `zip` to extract packages — so nothing else (such as `unzip` or `7z`) has to be installed on the machine:
+
+- **apt / dnf / yum** — the `-cli` package leaves `zip` out, so pvm installs the zip extension package right after PHP. It is best effort: if the package is missing, PHP is still installed and a warning says Composer will need `unzip` or `7z`. `pvm remove` removes it too.
+- **Homebrew** — `php@X.Y` already includes `openssl` and `zip`.
+- **pacman / zypper** — the packages are left as they are.
+- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_openssl.dll` / `php_zip.dll` (each only if its DLL is in `ext\`). An existing `php.ini` is never overwritten.
+
+Versions installed before this existed are not changed — reinstall them (`pvm remove` + `pvm install`) to get the extensions.
 
 ### Windows install directory
 
@@ -271,6 +282,47 @@ pvm run script.php       # version in use in this directory
 2. Resolves the version like `pvm use` (alias, branch → installed patch), or — without one — like the `php` shim; fails if it is not installed.
 3. Sets `PVM_VERSION=<version>` for the new process, so anything it starts that calls `php` through the pvm shim (Composer, `#!/usr/bin/env php` scripts, `shell_exec("php ...")`) uses the same version.
 4. Replaces itself with the php binary (Windows: runs it as a child), so stdin, stdout, signals and the exit code are php's own.
+
+---
+
+## `pvm composer [args...]`
+
+Runs Composer with the PHP version in use in the current directory. Composer is not installed globally: pvm downloads `composer.phar` the first time it is needed.
+
+```
+pvm composer [args...]
+
+Arguments:
+  args    Passed to Composer unchanged — every Composer command and flag works,
+          including -h/--help, -V and --
+```
+
+### Examples
+
+```sh
+pvm composer install
+pvm composer require monolog/monolog
+pvm composer -V
+pvm composer self-update
+PVM_VERSION=8.2 pvm composer update   # a different installed version for one call
+```
+
+### What it does
+
+1. Picks the php binary like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global → first `php` on `PATH` outside pvm.
+2. Asks that binary for its exact version and chooses the Composer line that supports it:
+
+   | PHP | Composer | Stored at |
+   |-----|----------|-----------|
+   | 7.2.5 or newer | latest stable | `<pvm-home>/composer/latest-stable/composer.phar` |
+   | 5.3.2 – 7.2.4 | 2.2 LTS | `<pvm-home>/composer/latest-2.2.x/composer.phar` |
+   | older | — error | — |
+
+3. If that `composer.phar` is missing, downloads it from `getcomposer.org/download/<line>/composer.phar`, checks it against the published `.sha256` and saves it atomically. A notice goes to stderr, so stdout stays Composer's own.
+4. Sets `PVM_VERSION=<version>` (when the version is pvm-managed), so scripts Composer runs that call `php` use the same version.
+5. Replaces itself with `php composer.phar args...` (Windows: runs it as a child), so stdin, stdout, signals and the exit code are Composer's.
+
+The same `composer.phar` is shared by every PHP version on its line; Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. `pvm composer self-update` updates the stored phar in place. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm self-remove` deletes the stored phars with the data directory.
 
 ---
 

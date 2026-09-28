@@ -91,6 +91,9 @@ pvm use lts
 # Remove an installed version
 pvm remove 8.3         # alias: rm
 
+# Run Composer with the PHP version in use (composer.phar is downloaded on first use)
+pvm composer install
+
 # Upgrade pvm itself to the latest release
 pvm self-upgrade
 
@@ -108,9 +111,9 @@ pvm self-remove
 | Linux (Arch) | `pacman`, `sudo`. Only the version available in the official repos can be installed. |
 | Linux (openSUSE) | `zypper`, `sudo`. |
 | macOS | [Homebrew](https://brew.sh) |
-| Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) |
+| Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) and pvm writes its `php.ini` |
 
-pvm detects the package manager automatically on Linux — no configuration needed.
+pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the `zip` extension (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer.
 
 ## PATH setup
 
