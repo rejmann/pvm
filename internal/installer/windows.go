@@ -31,9 +31,6 @@ func WindowsInstall(base, ver string) error {
 	if _, err := os.Stat(binPath); err != nil {
 		return fmt.Errorf("php.exe not found at %s after extraction", binPath)
 	}
-	if err := writePHPIni(installDir); err != nil {
-		return fmt.Errorf("write php.ini: %w", err)
-	}
 
 	verDir := filepath.Join(base, "versions", ver)
 	if err := os.MkdirAll(verDir, 0755); err != nil {
@@ -68,15 +65,4 @@ func resolveFullVersion(ver, branch string) (string, error) {
 // e.g. %LOCALAPPDATA%\pvm\php\8.3
 func phpInstallDir(base, branch string) string {
 	return filepath.Join(base, "php", branch)
-}
-
-// WindowsEnsureExtensions writes php.ini for an installed version that has
-// none. An existing php.ini is the user's: pvm only says what to add.
-func WindowsEnsureExtensions(base, ver string) error {
-	installDir := phpInstallDir(base, majorMinor(ver))
-	iniPath := filepath.Join(installDir, "php.ini")
-	if _, err := os.Stat(iniPath); err == nil {
-		return fmt.Errorf("%s already exists — add this to it:\n%s", iniPath, pvmIniBlock(installDir))
-	}
-	return writePHPIni(installDir)
 }

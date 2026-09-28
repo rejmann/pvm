@@ -3,10 +3,14 @@ services:
     build:
       context: .
       target: source
+    user: "${PVM_UID:-1000}:${PVM_GID:-1000}"
     environment:
       CGO_ENABLED: "0"
+      GOCACHE: /tmp/go-cache
     volumes:
-      - .:/src
+      - ./dist:/src/dist
+      - ./.local/bin:/src/.local/bin
+      - ./.local/go-cache:/tmp/go-cache
 
   app-pvm:
     build:
