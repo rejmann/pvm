@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
 )
 
 func TestShimTarget(t *testing.T) {

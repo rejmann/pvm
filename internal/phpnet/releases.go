@@ -1,9 +1,11 @@
-package php
+package phpnet
 
 import (
 	"context"
 	"fmt"
 	"sort"
+
+	"github.com/rejmann/pvm/internal/version"
 )
 
 const urlBase = "https://www.php.net/releases/index.php?json"
@@ -18,7 +20,7 @@ type Supported struct {
 type SupportedResponse = map[string]Supported
 
 func FetchAllBranches(ctx context.Context) ([]Branch, error) {
-	supported, err := httpRequest[SupportedResponse](ctx, urlBase, HttpMethod.Get, nil)
+	supported, err := getJSON[SupportedResponse](ctx, urlBase)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +67,9 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 // sortBranches orders branches newest to oldest (8.10, …, 8.0, 7.4, …, 5.0).
 func sortBranches(branches []Branch) {
 	sort.Slice(branches, func(i, j int) bool {
-		return branchKey(branches[i].Name) > branchKey(branches[j].Name)
+		a, _ := version.Parse(branches[i].Name)
+		b, _ := version.Parse(branches[j].Name)
+		return a.Compare(b) > 0
 	})
 }
 
@@ -82,7 +86,7 @@ func fetchMajorBranches(
 	supported SupportedResponse,
 ) ([]Branch, error) {
 	url := urlBase + "&max=500&version=" + major
-	all, err := httpRequest[MajorResponse](ctx, url, HttpMethod.Get, nil)
+	all, err := getJSON[MajorResponse](ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -111,42 +115,33 @@ func fetchMajorBranches(
 	return branches, nil
 }
 
+// latestPatchPerBranch maps each branch ("8.3") to its newest release
+// ("8.3.30"). Keys that are not a full major.minor.patch are ignored.
 func latestPatchPerBranch(all MajorResponse) map[string]string {
-	type patchEntry struct {
-		patch string
-		key   [3]int
-	}
-	best := map[string]patchEntry{}
+	best := map[string]version.Version{}
+	result := map[string]string{}
 
-	for patchStr := range all {
-		parts := splitVersion(patchStr)
-		if len(parts) < 3 {
+	for s := range all {
+		v, err := version.Parse(s)
+		if err != nil || !v.HasPatch() {
 			continue
 		}
-
-		branch := parts[0] + "." + parts[1]
-		k := versionKey(parts)
-		cur, ok := best[branch]
-		if !ok || k[2] > cur.key[2] {
-			best[branch] = patchEntry{patch: patchStr, key: k}
+		branch := version.Branch(s)
+		if cur, ok := best[branch]; !ok || v.Compare(cur) > 0 {
+			best[branch] = v
+			result[branch] = s
 		}
 	}
-
-	result := make(map[string]string, len(best))
-	for branch, entry := range best {
-		result[branch] = entry.patch
-	}
-
 	return result
 }
 
-func fetchReleases(ctx context.Context) ([]Release, error) {
+func fetchSupported(ctx context.Context) ([]Branch, error) {
 	all, err := FetchAllBranches(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var supported []Release
+	var supported []Branch
 	for _, b := range all {
 		if b.Status == StatusSupported {
 			supported = append(supported, b)
@@ -162,14 +157,13 @@ func fetchReleases(ctx context.Context) ([]Release, error) {
 
 // LatestPatch returns the latest full version for a given branch (e.g. "8.3" → "8.3.30").
 func LatestPatch(ctx context.Context, branch string) (string, error) {
-	parts := splitVersion(branch)
-	if len(parts) < 1 {
-		return "", fmt.Errorf("invalid branch %q", branch)
+	b, err := version.Parse(branch)
+	if err != nil {
+		return "", fmt.Errorf("invalid branch %q: %w", branch, err)
 	}
-	major := parts[0]
 
-	url := urlBase + "&max=500&version=" + major
-	all, err := httpRequest[MajorResponse](ctx, url, HttpMethod.Get, nil)
+	url := fmt.Sprintf("%s&max=500&version=%d", urlBase, b.Major)
+	all, err := getJSON[MajorResponse](ctx, url)
 	if err != nil {
 		return "", err
 	}
@@ -182,8 +176,9 @@ func LatestPatch(ctx context.Context, branch string) (string, error) {
 	return v, nil
 }
 
+// LatestLTS returns the newest supported branch (e.g. "8.5").
 func LatestLTS(ctx context.Context) (string, error) {
-	releases, err := fetchReleases(ctx)
+	releases, err := fetchSupported(ctx)
 	if err != nil {
 		return "", err
 	}

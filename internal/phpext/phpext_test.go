@@ -1,8 +1,8 @@
-package installer
+package phpext
 
 import "testing"
 
-func TestNormalizeExtension(t *testing.T) {
+func TestNormalize(t *testing.T) {
 	for in, want := range map[string]string{
 		"ext-xml":       "xml",
 		"EXT-DOM":       "xml",
@@ -11,8 +11,8 @@ func TestNormalizeExtension(t *testing.T) {
 		"pdo_sqlite":    "sqlite3",
 		" intl ":        "intl",
 	} {
-		if got := normalizeExtension(in); got != want {
-			t.Errorf("normalizeExtension(%q) = %q, want %q", in, got, want)
+		if got := Normalize(in); got != want {
+			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

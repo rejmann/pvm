@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpext"
+	"github.com/rejmann/pvm/internal/version"
 )
 
 const (
@@ -35,10 +37,10 @@ type pkgManagerDef struct {
 
 var packageManagers = []pkgManagerDef{
 	{
-		bin:       pmApt,
-		phpPkg:    func(branch string) string { return "php" + branch + "-cli" },
-		extPkg:    func(branch, ext string) string { return "php" + branch + "-" + ext },
-		phpBin:    func(branch string) string { return phpBinDir + branch },
+		bin:    pmApt,
+		phpPkg: func(branch string) string { return "php" + branch + "-cli" },
+		extPkg: func(branch, ext string) string { return "php" + branch + "-" + ext },
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmApt, "install", "-y", pkg}
 		},
@@ -62,10 +64,10 @@ var packageManagers = []pkgManagerDef{
 		},
 	},
 	{
-		bin:       pmDnf,
-		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
-		extPkg:    remiExtPkg,
-		phpBin:    func(branch string) string { return phpBinDir + branch },
+		bin:    pmDnf,
+		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
+		extPkg: remiExtPkg,
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmDnf, "install", "-y", pkg}
 		},
@@ -85,10 +87,10 @@ var packageManagers = []pkgManagerDef{
 		},
 	},
 	{
-		bin:       pmYum,
-		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
-		extPkg:    remiExtPkg,
-		phpBin:    func(branch string) string { return phpBinDir + branch },
+		bin:    pmYum,
+		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
+		extPkg: remiExtPkg,
+		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmYum, "install", "-y", pkg}
 		},
@@ -152,7 +154,7 @@ func LinuxInstall(h *home.Dir, ver string) error {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
 	}
 
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	pkg := pm.phpPkg(branch)
 
 	if pm.preInstall != nil {
@@ -169,7 +171,7 @@ func LinuxInstall(h *home.Dir, ver string) error {
 
 	// pacman/zypper have no extPkg: pvm does not manage their extensions.
 	if pm.extPkg != nil {
-		if err := installExtensions(pm, h, ver, BaseExtensions); err != nil {
+		if err := installExtensions(pm, h, ver, phpext.Base); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: %v. PHP works; pvm composer offers to install missing extensions when a project needs them.\n", err)
 		}
 	}
@@ -188,7 +190,7 @@ func LinuxRemove(h *home.Dir, ver string) error {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
 	}
 
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	pkg := pm.phpPkg(branch)
 
 	// Extensions first, and quietly: some may never have been installed. The
@@ -196,7 +198,7 @@ func LinuxRemove(h *home.Dir, ver string) error {
 	// recorded its packages.
 	extras := h.Packages(ver)
 	if pm.extPkg != nil {
-		for _, ext := range BaseExtensions {
+		for _, ext := range phpext.Base {
 			extras = append(extras, pm.extPkg(branch, ext))
 		}
 	}
@@ -231,12 +233,12 @@ func installExtensions(pm *pkgManagerDef, h *home.Dir, ver string, exts []string
 	if pm.extPkg == nil {
 		return fmt.Errorf("pvm cannot install PHP extensions with %s", pm.bin)
 	}
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 
 	var installed, failed []string
 	seen := map[string]bool{}
 	for _, ext := range exts {
-		pkg := pm.extPkg(branch, normalizeExtension(ext))
+		pkg := pm.extPkg(branch, phpext.Normalize(ext))
 		if seen[pkg] {
 			continue
 		}

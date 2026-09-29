@@ -1,4 +1,5 @@
-package php
+// Package sysphp finds PHP binaries installed on the system outside pvm.
+package sysphp
 
 import (
 	"os/exec"
@@ -11,12 +12,15 @@ import (
 	"github.com/rejmann/pvm/internal/version"
 )
 
-type SystemInstall struct {
+// PHP is a php binary found on the system, outside pvm.
+type PHP struct {
 	Version string
 	Binary  string
 }
 
-func DetectSystem() []SystemInstall {
+// Detect finds the PHP versions installed on the system, one binary per
+// version, oldest first.
+func Detect() []PHP {
 	globs := platformGlobs()
 	seen := map[string]string{} // version → binary path
 
@@ -45,9 +49,9 @@ func DetectSystem() []SystemInstall {
 		}
 	}
 
-	var results []SystemInstall
+	var results []PHP
 	for v, bin := range seen {
-		results = append(results, SystemInstall{Version: v, Binary: bin})
+		results = append(results, PHP{Version: v, Binary: bin})
 	}
 
 	sort.Slice(results, func(i, j int) bool {

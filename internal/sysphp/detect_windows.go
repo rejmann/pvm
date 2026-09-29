@@ -1,6 +1,6 @@
 //go:build windows
 
-package php
+package sysphp
 
 import (
 	"os"

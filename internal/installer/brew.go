@@ -10,10 +10,11 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/version"
 )
 
 func BrewInstall(h *home.Dir, ver string) error {
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	pkg := "php@" + branch
 
 	cmd := exec.Command("brew", "install", pkg)
@@ -32,7 +33,7 @@ func BrewInstall(h *home.Dir, ver string) error {
 }
 
 func BrewRemove(h *home.Dir, ver string) error {
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	cmd := exec.Command("brew", "uninstall", "php@"+branch)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

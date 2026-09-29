@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package php
+package sysphp
 
 import (
 	"runtime"

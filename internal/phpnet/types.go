@@ -1,4 +1,5 @@
-package php
+// Package phpnet reads the PHP releases published on php.net.
+package phpnet
 
 type Status int
 
@@ -23,5 +24,3 @@ type Branch struct {
 	SupportedVersions []string
 	IsMuseum          bool
 }
-
-type Release = Branch

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rejmann/pvm/internal/php"
+	"github.com/rejmann/pvm/internal/sysphp"
 	"github.com/spf13/cobra"
 
 	"github.com/rejmann/pvm/internal/home"
@@ -49,9 +49,9 @@ func listVersions(h *home.Dir, out io.Writer) error {
 		printed = true
 	}
 
-	system := php.DetectSystem()
+	system := sysphp.Detect()
 
-	var unmanaged []php.SystemInstall
+	var unmanaged []sysphp.PHP
 	for _, s := range system {
 		if !managedSet[s.Version] {
 			unmanaged = append(unmanaged, s)

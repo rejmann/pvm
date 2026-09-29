@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
+	pvmversion "github.com/rejmann/pvm/internal/version"
 )
 
 func SetCurrent(h *home.Dir, version, binaryPath string) error {
@@ -161,19 +162,11 @@ $newPath = ($dir + ';' + ($parts -join ';')).TrimEnd(';')
 // windowsInstalledBinary returns the php.exe path from the pvm-managed install
 // directory (php/<major>.<minor>/php.exe) if it exists.
 func windowsInstalledBinary(h *home.Dir, version string) string {
-	p := filepath.Join(h.PHPDir(versionBranch(version)), "php.exe")
+	p := filepath.Join(h.PHPDir(pvmversion.Branch(version)), "php.exe")
 	if _, err := os.Stat(p); err == nil {
 		return p
 	}
 	return ""
-}
-
-func versionBranch(version string) string {
-	parts := strings.SplitN(version, ".", 3)
-	if len(parts) >= 2 {
-		return parts[0] + "." + parts[1]
-	}
-	return version
 }
 
 // EnsureShim is a no-op on Windows: the php.bat shim is written by SetCurrent

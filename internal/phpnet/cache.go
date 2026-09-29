@@ -1,4 +1,4 @@
-package php
+package phpnet
 
 import (
 	"context"

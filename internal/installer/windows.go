@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
-	"github.com/rejmann/pvm/internal/php"
+	"github.com/rejmann/pvm/internal/phpnet"
+	"github.com/rejmann/pvm/internal/version"
 )
 
 func WindowsInstall(h *home.Dir, ver string) error {
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 
 	fullVer, err := resolveFullVersion(ver, branch)
 	if err != nil {
@@ -40,7 +41,7 @@ func WindowsInstall(h *home.Dir, ver string) error {
 }
 
 func WindowsRemove(h *home.Dir, ver string) error {
-	branch := majorMinor(ver)
+	branch := version.Branch(ver)
 	installDir := h.PHPDir(branch)
 
 	if _, err := os.Stat(installDir); os.IsNotExist(err) {
@@ -57,10 +58,10 @@ func resolveFullVersion(ver, branch string) (string, error) {
 	if len(strings.Split(ver, ".")) == 3 {
 		return ver, nil
 	}
-	return php.LatestPatch(context.Background(), branch)
+	return phpnet.LatestPatch(context.Background(), branch)
 }
 
 // WindowsEnsureExtensions enables exts in the php.ini of an installed version.
 func WindowsEnsureExtensions(h *home.Dir, ver string, exts []string) error {
-	return enableIniExtensions(h.PHPDir(majorMinor(ver)), exts)
+	return enableIniExtensions(h.PHPDir(version.Branch(ver)), exts)
 }

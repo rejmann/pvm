@@ -15,9 +15,9 @@ type InstallerFunc func(h *home.Dir, ver string) error
 var InstallCmd = &cobra.Command{
 	Use:     "install [i] <version|lts>",
 	Aliases: []string{"i"},
-	Short: "Install a PHP version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstall,
+	Short:   "Install a PHP version",
+	Args:    cobra.ExactArgs(1),
+	RunE:    runInstall,
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {

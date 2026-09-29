@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 
-	"github.com/rejmann/pvm/internal/php"
+	"github.com/rejmann/pvm/internal/phpnet"
 )
 
 type phpLTSResolver struct {
@@ -11,5 +11,5 @@ type phpLTSResolver struct {
 }
 
 func (r phpLTSResolver) ResolveLTS() (string, error) {
-	return php.LatestLTS(r.ctx)
+	return phpnet.LatestLTS(r.ctx)
 }

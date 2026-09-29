@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rejmann/pvm/internal/php"
+	"github.com/rejmann/pvm/internal/phpnet"
 	"github.com/spf13/cobra"
 
 	"github.com/rejmann/pvm/internal/home"
@@ -14,10 +14,10 @@ import (
 var AvailableCmd = &cobra.Command{
 	Use:     "available [a]",
 	Aliases: []string{"a"},
-	Short: "List all PHP versions available to install from php.net",
-	Long:  "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
-	Args:  cobra.NoArgs,
-	RunE:  runAvailable,
+	Short:   "List all PHP versions available to install from php.net",
+	Long:    "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
+	Args:    cobra.NoArgs,
+	RunE:    runAvailable,
 }
 
 func init() {
@@ -30,7 +30,7 @@ func runAvailable(cmd *cobra.Command, args []string) error {
 }
 
 func printAvailable(ctx context.Context, h *home.Dir, forceRefresh bool, out io.Writer) error {
-	branches, err := php.FetchAllBranchesCached(ctx, h.AvailableCache(), forceRefresh)
+	branches, err := phpnet.FetchAllBranchesCached(ctx, h.AvailableCache(), forceRefresh)
 	if err != nil {
 		return err
 	}

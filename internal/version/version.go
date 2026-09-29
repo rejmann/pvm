@@ -69,3 +69,13 @@ func (v Version) Compare(other Version) int {
 func (v Version) HasPatch() bool {
 	return v.hasPatch
 }
+
+// Branch returns the major.minor part of a version string ("8.3.30" → "8.3").
+// Anything without a minor part is returned unchanged.
+func Branch(s string) string {
+	parts := strings.SplitN(s, ".", 3)
+	if len(parts) >= 2 {
+		return parts[0] + "." + parts[1]
+	}
+	return s
+}
