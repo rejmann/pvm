@@ -13,10 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var RunCmd = &cobra.Command{
-	Use:   "run [-v version | version] <file> [args...]",
-	Short: "Run a PHP file with a specific installed version (default: the version in use)",
-	Long: `Run a PHP file with a specific installed version, without changing the
+func newRunCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run [-v version | version] <file> [args...]",
+		Short: "Run a PHP file with a specific installed version (default: the version in use)",
+		Long: `Run a PHP file with a specific installed version, without changing the
 global or project version. The file can be given directly or with -f/--file;
 the arguments after it are passed to the script.
 
@@ -27,14 +28,15 @@ the global version).
 
 PVM_VERSION is set for the php process, so tools it starts that call php
 (e.g. Composer or scripts with #!/usr/bin/env php) use the same version.`,
-	Example: `  pvm run 8.5 script.php
+		Example: `  pvm run 8.5 script.php
   pvm run 8.2 --file script.php arg1 arg2
   pvm run --version 8.2 script.php
   pvm run -v lts script.php
   pvm run lts script.php
   pvm run script.php       # version in use`,
-	DisableFlagParsing: true,
-	RunE:               runRun,
+		DisableFlagParsing: true,
+		RunE:               runRun,
+	}
 }
 
 func runRun(cmd *cobra.Command, args []string) error {

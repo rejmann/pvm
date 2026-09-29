@@ -16,10 +16,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var SelfRemoveCmd = &cobra.Command{
-	Use:   "self-remove",
-	Short: "Uninstall pvm from this machine",
-	Long: `Remove the pvm binary and its data directory. On Windows it also removes
+func newSelfRemoveCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "self-remove",
+		Short: "Uninstall pvm from this machine",
+		Long: `Remove the pvm binary and its data directory. On Windows it also removes
 the pvm entries from the user PATH and the pvm block from the PowerShell
 profile.
 
@@ -30,16 +31,15 @@ are kept unless --php is given.
 Run it as your regular user, not with sudo. If the binary lives in a directory
 you can't write to (e.g. /usr/local/bin), everything else is removed and the
 command to delete the binary is printed.`,
-	Example: `  pvm self-remove
+		Example: `  pvm self-remove
   pvm self-remove --php
   pvm self-remove --yes`,
-	Args: cobra.NoArgs,
-	RunE: runSelfRemove,
-}
-
-func init() {
-	SelfRemoveCmd.Flags().BoolP("yes", "y", false, "Do not ask for confirmation")
-	SelfRemoveCmd.Flags().Bool("php", false, "Also remove the PHP versions installed through pvm")
+		Args: cobra.NoArgs,
+		RunE: runSelfRemove,
+	}
+	c.Flags().BoolP("yes", "y", false, "Do not ask for confirmation")
+	c.Flags().Bool("php", false, "Also remove the PHP versions installed through pvm")
+	return c
 }
 
 // selfRemoveOps holds the side effects of self-remove that touch the system,

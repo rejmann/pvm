@@ -11,17 +11,17 @@ import (
 	"github.com/rejmann/pvm/internal/home"
 )
 
-var AvailableCmd = &cobra.Command{
-	Use:     "available [a]",
-	Aliases: []string{"a"},
-	Short:   "List all PHP versions available to install from php.net",
-	Long:    "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
-	Args:    cobra.NoArgs,
-	RunE:    runAvailable,
-}
-
-func init() {
-	AvailableCmd.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
+func newAvailableCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:     "available [a]",
+		Aliases: []string{"a"},
+		Short:   "List all PHP versions available to install from php.net",
+		Long:    "List all PHP versions available to install from php.net.\nResults are cached for 1 day. Use --refresh to force a fresh fetch.",
+		Args:    cobra.NoArgs,
+		RunE:    runAvailable,
+	}
+	c.Flags().BoolP("refresh", "r", false, "Refresh the list of available PHP versions by fetching from php.net")
+	return c
 }
 
 func runAvailable(cmd *cobra.Command, args []string) error {

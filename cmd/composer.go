@@ -12,10 +12,11 @@ import (
 	"golang.org/x/term"
 )
 
-var ComposerCmd = &cobra.Command{
-	Use:   "composer [args...]",
-	Short: "Run Composer with the PHP version in use (downloads composer.phar on first use)",
-	Long: `Run Composer with the pvm-managed PHP version in use in the current
+func newComposerCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "composer [args...]",
+		Short: "Run Composer with the PHP version in use (downloads composer.phar on first use)",
+		Long: `Run Composer with the pvm-managed PHP version in use in the current
 directory ($PVM_VERSION, the nearest .php-version, then the global version).
 Every argument is passed to Composer unchanged, including -h, -V and --.
 
@@ -34,12 +35,13 @@ neither unzip nor 7z is available, pvm offers to install it up front.
 
 PVM_VERSION is set for the process, so scripts Composer runs that call php
 use the same version.`,
-	Example: `  pvm composer install
+		Example: `  pvm composer install
   pvm composer require monolog/monolog
   pvm composer -V
   PVM_VERSION=8.2 pvm composer update`,
-	DisableFlagParsing: true,
-	RunE:               runComposer,
+		DisableFlagParsing: true,
+		RunE:               runComposer,
+	}
 }
 
 func runComposer(cmd *cobra.Command, args []string) error {

@@ -8,12 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var InstallCmd = &cobra.Command{
-	Use:     "install [i] <version|lts>",
-	Aliases: []string{"i"},
-	Short:   "Install a PHP version",
-	Args:    cobra.ExactArgs(1),
-	RunE:    runInstall,
+func newInstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "install [i] <version|lts>",
+		Aliases: []string{"i"},
+		Short:   "Install a PHP version",
+		Args:    cobra.ExactArgs(1),
+		RunE:    runInstall,
+	}
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {

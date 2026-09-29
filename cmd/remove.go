@@ -8,12 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var RemoveCmd = &cobra.Command{
-	Use:     "remove [rm] <version>",
-	Aliases: []string{"rm"},
-	Short:   "Remove an installed PHP version",
-	Args:    cobra.ExactArgs(1),
-	RunE:    runRemove,
+func newRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "remove [rm] <version>",
+		Aliases: []string{"rm"},
+		Short:   "Remove an installed PHP version",
+		Args:    cobra.ExactArgs(1),
+		RunE:    runRemove,
+	}
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {

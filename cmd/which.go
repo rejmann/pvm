@@ -10,11 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var WhichCmd = &cobra.Command{
-	Use:   "which",
-	Short: "Print the path of the PHP binary used in the current directory",
-	Args:  cobra.NoArgs,
-	RunE:  runWhich,
+func newWhichCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "which",
+		Short: "Print the path of the PHP binary used in the current directory",
+		Args:  cobra.NoArgs,
+		RunE:  runWhich,
+	}
 }
 
 func runWhich(cmd *cobra.Command, args []string) error {

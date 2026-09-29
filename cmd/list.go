@@ -8,12 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ListCmd = &cobra.Command{
-	Use:     "list [ls]",
-	Aliases: []string{"ls"},
-	Short:   "List installed PHP versions",
-	Args:    cobra.NoArgs,
-	RunE:    runList,
+func newListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list [ls]",
+		Aliases: []string{"ls"},
+		Short:   "List installed PHP versions",
+		Args:    cobra.NoArgs,
+		RunE:    runList,
+	}
 }
 
 func runList(cmd *cobra.Command, args []string) error {

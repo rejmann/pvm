@@ -10,12 +10,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var CurrentCmd = &cobra.Command{
-	Use:     "current [cur]",
-	Aliases: []string{"cur"},
-	Short:   "Show the currently active PHP version",
-	Args:    cobra.NoArgs,
-	RunE:    runCurrent,
+func newCurrentCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "current [cur]",
+		Aliases: []string{"cur"},
+		Short:   "Show the currently active PHP version",
+		Args:    cobra.NoArgs,
+		RunE:    runCurrent,
+	}
 }
 
 func runCurrent(cmd *cobra.Command, args []string) error {

@@ -10,12 +10,14 @@ import (
 )
 
 // ShimCmd is invoked by the php shim script; it is not meant to be run by hand.
-var ShimCmd = &cobra.Command{
-	Use:                "shim php [args...]",
-	Short:              "Run php with the version selected for the current directory",
-	Hidden:             true,
-	DisableFlagParsing: true,
-	RunE:               runShim,
+func newShimCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:                "shim php [args...]",
+		Short:              "Run php with the version selected for the current directory",
+		Hidden:             true,
+		DisableFlagParsing: true,
+		RunE:               runShim,
+	}
 }
 
 func runShim(cmd *cobra.Command, args []string) error {
