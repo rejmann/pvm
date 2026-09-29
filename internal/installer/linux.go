@@ -263,16 +263,16 @@ func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 	return s.installExtensions(pm, h, ver, exts)
 }
 
-// RemoveExtensions uninstalls the packages of exts for installed version ver.
-// Only packages pvm installed are removed: the recorded ones and the base
-// extensions, which pvm install adds.
-func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
+// RemoveExtensions uninstalls the packages pvm installed for exts (the
+// recorded ones and the base extensions pvm install adds). The others ship
+// with PHP, like calendar in php<X.Y>-common, or came from elsewhere: they
+// are disabled instead, since uninstalling their package would take PHP (or
+// something pvm does not own) with it.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) (phpext.Removal, error) {
+	var r phpext.Removal
 	pm := detectPackageManager()
 	if pm == nil {
-		return errNoPackageManager
-	}
-	if pm.extPkg == nil {
-		return fmt.Errorf("pvm cannot remove PHP extensions with %s", pm.bin)
+		return r, errNoPackageManager
 	}
 	branch := version.Branch(ver)
 
@@ -280,43 +280,84 @@ func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error 
 	for _, pkg := range h.Packages(ver) {
 		owned[pkg] = true
 	}
-	for _, ext := range phpext.Base {
-		owned[pm.extPkg(branch, ext)] = true
-	}
-
-	var pkgs, foreign []string
-	for _, ext := range exts {
-		pkg := pm.extPkg(branch, phpext.Normalize(ext))
-		switch {
-		case slices.Contains(pkgs, pkg):
-		case owned[pkg]:
-			pkgs = append(pkgs, pkg)
-		default:
-			foreign = append(foreign, ext)
+	if pm.extPkg != nil {
+		for _, ext := range phpext.Base {
+			owned[pm.extPkg(branch, ext)] = true
 		}
 	}
-	if len(foreign) > 0 {
-		return fmt.Errorf("pvm did not install %s for PHP %s, so it does not remove it", strings.Join(foreign, ", "), ver)
-	}
 
-	if err := sudo.Authenticate(s.Stderr, "remove PHP extensions with "+pm.bin); err != nil {
-		return err
-	}
-	var removed, failed []string
-	for _, pkg := range pkgs {
-		if err := s.sudo(pm.removeArgs(pkg)); err != nil {
-			failed = append(failed, pkg)
+	var pkgs, others []string
+	for _, ext := range exts {
+		if pm.extPkg == nil {
+			others = append(others, ext)
 			continue
 		}
-		removed = append(removed, pkg)
+		pkg := pm.extPkg(branch, phpext.Normalize(ext))
+		if !owned[pkg] {
+			others = append(others, ext)
+			continue
+		}
+		r.Uninstalled = append(r.Uninstalled, ext)
+		if !slices.Contains(pkgs, pkg) {
+			pkgs = append(pkgs, pkg)
+		}
 	}
-	if err := h.RemovePackages(ver, removed); err != nil {
-		return fmt.Errorf("record removed extensions: %w", err)
+
+	var toDisable []string
+	for _, ext := range others {
+		if s.toggleable(pm, h, ver, ext) {
+			toDisable = append(toDisable, ext)
+		} else {
+			r.Stuck = append(r.Stuck, ext)
+		}
 	}
-	if len(failed) > 0 {
-		return fmt.Errorf("could not remove %s via %s", strings.Join(failed, ", "), pm.bin)
+
+	if len(pkgs) > 0 {
+		if err := sudo.Authenticate(s.Stderr, "remove PHP extensions with "+pm.bin); err != nil {
+			return phpext.Removal{}, err
+		}
+		var removed, failed []string
+		for _, pkg := range pkgs {
+			if err := s.sudo(pm.removeArgs(pkg)); err != nil {
+				failed = append(failed, pkg)
+				continue
+			}
+			removed = append(removed, pkg)
+		}
+		if err := h.RemovePackages(ver, removed); err != nil {
+			return phpext.Removal{}, fmt.Errorf("record removed extensions: %w", err)
+		}
+		if len(failed) > 0 {
+			return phpext.Removal{}, fmt.Errorf("could not remove %s via %s", strings.Join(failed, ", "), pm.bin)
+		}
 	}
-	return nil
+	if len(toDisable) > 0 {
+		if err := s.SetExtensionsEnabled(h, ver, toDisable, false); err != nil {
+			return phpext.Removal{Uninstalled: r.Uninstalled}, err
+		}
+		r.Disabled = toDisable
+	}
+	return r, nil
+}
+
+// toggleable reports whether ext can be turned on and off for version ver:
+// apt has its mods-available .ini, elsewhere a file of PHP's scan directory
+// loads it. Extensions compiled into PHP have neither.
+func (s *System) toggleable(pm *pkgManagerDef, h *home.Dir, ver, ext string) bool {
+	if pm.bin == pmApt {
+		_, err := os.Stat(aptModIni(version.Branch(ver), ext))
+		return err == nil
+	}
+	bin, err := h.Binary(ver)
+	if err != nil {
+		return false
+	}
+	return confdLoads(bin, ext)
+}
+
+// aptModIni is the .ini of ext that phpenmod/phpdismod link into conf.d.
+func aptModIni(branch, ext string) string {
+	return "/etc/php/" + branch + "/mods-available/" + phpext.Name(ext) + ".ini"
 }
 
 // SetExtensionsEnabled turns exts on or off for installed version ver
@@ -335,7 +376,7 @@ func (s *System) SetExtensionsEnabled(h *home.Dir, ver string, exts []string, en
 	branch := version.Branch(ver)
 	var missing []string
 	for _, ext := range exts {
-		if _, err := os.Stat("/etc/php/" + branch + "/mods-available/" + ext + ".ini"); err != nil {
+		if _, err := os.Stat(aptModIni(branch, ext)); err != nil {
 			missing = append(missing, ext)
 		}
 	}

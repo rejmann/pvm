@@ -380,7 +380,7 @@ Manages the PHP extensions of an installed version. It works on the version in u
 ```
 pvm ext list    [-v version]              # alias ls: extensions PHP loads
 pvm ext add     [-v version] <ext>...     # install
-pvm ext remove  [-v version] <ext>...     # alias rm: uninstall what pvm installed
+pvm ext remove  [-v version] <ext>...     # alias rm: uninstall, or disable what ships with PHP
 pvm ext disable [-v version] <ext>...     # turn off without uninstalling
 pvm ext enable  [-v version] <ext>...     # turn back on
 ```
@@ -409,7 +409,7 @@ Names are accepted as PHP or Composer spell them (`intl`, `ext-intl`, `Zend OPca
 | macOS | `brew install shivammathur/extensions/<ext>@<X.Y>` ([tap](https://github.com/shivammathur/homebrew-extensions), for PECL extensions — `php@X.Y` bundles the core ones) | Same, in Homebrew's `conf.d` |
 | Windows | `extension=` line in the version's `php.ini`, for the DLLs in `ext\` (the builds bundle no PECL extensions); `remove` deletes the line | Comments the line out, or back in |
 
-Packages and formulas pvm installs are recorded in `versions/<X.Y>/packages`, so `pvm remove` uninstalls them with the version. `pvm ext remove` only removes what pvm installed (those, plus the base extensions of `pvm install`); anything else fails with `pvm did not install <ext>`. On Linux, root is needed as described in [Administrator rights](#administrator-rights-linux).
+Packages and formulas pvm installs are recorded in `versions/<X.Y>/packages`, so `pvm remove` uninstalls them with the version. `pvm ext remove` uninstalls what pvm installed (those, plus the base extensions of `pvm install`). Extensions that ship with PHP itself — on apt `calendar`, `ctype`, `exif`, `ftp`, `iconv`, `pdo`… all come in `php<X.Y>-common`, so uninstalling their package would take PHP with it — or that pvm did not install are **disabled** instead, as `pvm ext disable` does, and pvm says so (`pvm ext enable <ext>` brings them back). On Windows every extension is a DLL of the PHP build, so `remove` always disables. Extensions compiled into the PHP binary (`core`, `date`, `standard`…) have no package or `.ini` to act on and fail with `<ext> is compiled into PHP <X.Y>: it cannot be removed or disabled`; a name PHP does not know fails with `PHP <X.Y> has no <ext> extension`. On Linux, root is needed as described in [Administrator rights](#administrator-rights-linux).
 
 A version installed outside pvm (see [PHP installed before pvm](#php-installed-before-pvm)) can be listed, but `add`, `remove`, `enable` and `disable` refuse to change it — its extensions belong to the tool that installed it. `pvm composer` does the same instead of offering to install them.
 

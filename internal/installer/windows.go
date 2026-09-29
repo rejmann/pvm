@@ -8,9 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/phpnet"
 	"github.com/rejmann/pvm/internal/version"
 )
@@ -81,9 +83,20 @@ func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 }
 
 // RemoveExtensions stops the php.ini of installed version ver from loading
-// exts. Their DLLs ship with the PHP build, so nothing is deleted.
-func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
-	return disableIniExtensions(h.PHPDir(version.Branch(ver)), exts, true)
+// exts. Their DLLs ship with the PHP build, so they are disabled (commented
+// out), not deleted; the ones php.ini has no line for are compiled in.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) (phpext.Removal, error) {
+	missing, err := disableIniExtensions(h.PHPDir(version.Branch(ver)), exts)
+	if err != nil {
+		return phpext.Removal{}, err
+	}
+	r := phpext.Removal{Stuck: missing}
+	for _, ext := range exts {
+		if !slices.Contains(missing, phpext.Name(ext)) {
+			r.Disabled = append(r.Disabled, ext)
+		}
+	}
+	return r, nil
 }
 
 // SetExtensionsEnabled comments exts out of, or back into, the php.ini of
@@ -93,5 +106,9 @@ func (s *System) SetExtensionsEnabled(h *home.Dir, ver string, exts []string, en
 	if enabled {
 		return enableIniExtensions(dir, exts)
 	}
-	return disableIniExtensions(dir, exts, false)
+	missing, err := disableIniExtensions(dir, exts)
+	if err == nil && len(missing) > 0 {
+		err = fmt.Errorf("php.ini does not load %s", strings.Join(missing, ", "))
+	}
+	return err
 }

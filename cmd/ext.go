@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/installer"
+	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/rejmann/pvm/internal/sysphp"
 	"github.com/spf13/cobra"
@@ -46,7 +47,7 @@ Versions installed outside pvm can be listed but are never changed.`,
 		&cobra.Command{
 			Use:     "remove [rm] <extension>...",
 			Aliases: []string{"rm"},
-			Short:   "Uninstall extensions pvm installed",
+			Short:   "Uninstall extensions (the ones that ship with PHP are disabled instead)",
 			Args:    cobra.MinimumNArgs(1),
 			RunE:    runExtRemove,
 		},
@@ -130,11 +131,19 @@ func runExtRemove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := e.Remove(a, args); err != nil {
-		return err
+	r, err := e.Remove(a, args)
+	printRemoval(cmd.OutOrStdout(), r, a.Version)
+	return err
+}
+
+func printRemoval(out io.Writer, r phpext.Removal, version string) {
+	if len(r.Uninstalled) > 0 {
+		fmt.Fprintf(out, "Removed %s from PHP %s.\n", strings.Join(r.Uninstalled, ", "), version)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Removed %s from PHP %s.\n", strings.Join(args, ", "), a.Version)
-	return nil
+	for _, ext := range r.Disabled {
+		fmt.Fprintf(out, "%s ships with PHP %s (pvm did not install it), so it was disabled instead of uninstalled. "+
+			"Turn it back on with: pvm ext enable %s\n", ext, version, ext)
+	}
 }
 
 func runExtToggle(cmd *cobra.Command, args []string, enabled bool) error {

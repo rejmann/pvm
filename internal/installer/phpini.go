@@ -140,14 +140,15 @@ func enableIniExtensions(installDir string, exts []string) error {
 	return nil
 }
 
-// disableIniExtensions stops installDir\php.ini from loading exts: their
-// lines are commented out, or deleted when drop is set. An extension php.ini
-// does not load is reported.
-func disableIniExtensions(installDir string, exts []string, drop bool) error {
+// disableIniExtensions stops installDir\php.ini from loading exts by
+// commenting their lines out, so enableIniExtensions can bring them back.
+// It returns the extensions php.ini has no line for, enabled or not: the
+// ones compiled into PHP, or not there at all.
+func disableIniExtensions(installDir string, exts []string) (missing []string, err error) {
 	iniPath := filepath.Join(installDir, "php.ini")
 	data, err := os.ReadFile(iniPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	want := map[string]bool{}
@@ -155,32 +156,29 @@ func disableIniExtensions(installDir string, exts []string, drop bool) error {
 		want[phpext.Name(ext)] = true
 	}
 	found := map[string]bool{}
-	var out []string
-	for _, line := range strings.Split(string(data), "\n") {
+	changed := false
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
 		name, commented, ok := iniExtension(line)
-		if !ok || commented || !want[name] {
-			out = append(out, line)
+		if !ok || !want[name] {
 			continue
 		}
 		found[name] = true
-		if !drop {
-			out = append(out, ";"+strings.TrimLeft(line, " \t"))
+		if !commented {
+			lines[i] = ";" + strings.TrimLeft(line, " \t")
+			changed = true
 		}
 	}
 
-	var missing []string
 	for _, ext := range exts {
 		if name := phpext.Name(ext); !found[name] && !slices.Contains(missing, name) {
 			missing = append(missing, name)
 		}
 	}
-	if len(found) > 0 {
-		if err := os.WriteFile(iniPath, []byte(strings.Join(out, "\n")), 0644); err != nil {
-			return err
+	if changed {
+		if err := os.WriteFile(iniPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return nil, err
 		}
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("%s not enabled in %s", strings.Join(missing, ", "), iniPath)
-	}
-	return nil
+	return missing, nil
 }
