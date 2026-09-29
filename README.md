@@ -91,6 +91,11 @@ pvm use lts
 # Remove an installed version
 pvm remove 8.3         # alias: rm
 
+# Manage PHP extensions of the version in use (or -v <version>)
+pvm ext add redis intl
+pvm ext disable xdebug
+pvm ext list
+
 # Run Composer with the PHP version in use (composer.phar is downloaded on first use)
 pvm composer install
 
@@ -113,7 +118,7 @@ pvm self-remove
 | macOS | [Homebrew](https://brew.sh) |
 | Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) and pvm writes its `php.ini` |
 
-pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the base extensions `zip`, `xml`, `mbstring` and `curl` (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer. Any other extension a project needs, `pvm composer` offers to install when Composer asks for it.
+pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the base extensions `zip`, `xml`, `mbstring` and `curl` (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer. Any other extension is one `pvm ext add` away, and `pvm composer` offers the ones a project requires before running. On Linux, pvm asks for your sudo password once per command, when it first needs root.
 
 ## PATH setup
 

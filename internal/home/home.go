@@ -3,7 +3,7 @@
 //
 //	current-version          global version, written by pvm use
 //	versions/<v>/binary      path of the php binary of installed version v
-//	versions/<v>/packages    extension packages pvm installed for v (Linux)
+//	versions/<v>/packages    extension packages pvm installed for v (Linux, macOS)
 //	versions/<v>/system      v was installed outside pvm: adopted, never uninstalled
 //	system-checked           pvm already looked for a PHP installed before it
 //	php/<branch>/            PHP builds pvm extracted itself (Windows)

@@ -92,7 +92,7 @@ func (m *Manager) Lookup(arg string) (Active, error) {
 	if bin == "" {
 		return Active{}, errors.New("empty binary path for PHP " + installed)
 	}
-	return Active{Version: installed, Binary: bin, Source: "argument"}, nil
+	return Active{Version: installed, Binary: bin, Source: "argument", System: m.Home.System(installed)}, nil
 }
 
 // Select returns the version to run: arg when given, otherwise the version

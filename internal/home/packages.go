@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
-// packagesFile lists the extension packages pvm installed for a version, one
-// per line, so removing the version removes them too.
+// packagesFile lists the extension packages pvm installed for a version (apt,
+// dnf... packages or Homebrew formulas), one per line, so removing the
+// version removes them too.
 func (d *Dir) packagesFile(v string) string {
 	return filepath.Join(d.VersionDir(v), "packages")
 }
@@ -45,7 +46,32 @@ func (d *Dir) AddPackages(v string, pkgs []string) error {
 		}
 	}
 
+	return d.writePackages(v, all)
+}
+
+// RemovePackages forgets pkgs for version v, once they are uninstalled.
+func (d *Dir) RemovePackages(v string, pkgs []string) error {
+	drop := map[string]bool{}
+	for _, p := range pkgs {
+		drop[p] = true
+	}
+	var keep []string
+	for _, p := range d.Packages(v) {
+		if !drop[p] {
+			keep = append(keep, p)
+		}
+	}
+	return d.writePackages(v, keep)
+}
+
+func (d *Dir) writePackages(v string, all []string) error {
 	path := d.packagesFile(v)
+	if len(all) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}

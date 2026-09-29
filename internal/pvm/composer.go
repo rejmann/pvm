@@ -11,6 +11,7 @@ import (
 
 	"github.com/rejmann/pvm/internal/composer"
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/sysphp"
 )
 
@@ -60,8 +61,14 @@ func (c *Composer) Run(ctx context.Context, dir string, args []string) (int, err
 	if err != nil {
 		return 0, err
 	}
+	// Extensions already offered are not offered again after Composer runs.
+	offered := map[string]bool{}
 	if !info.Zip && !c.CanUnzip {
-		c.offerExtensions(a.Version, []string{"zip"}, "which Composer needs to extract packages")
+		offered["zip"] = true
+		c.offerExtensions(a, []string{"zip"}, "which Composer needs to extract packages")
+	}
+	if missing := c.missingForProject(dir, args, info, offered); len(missing) > 0 {
+		c.offerExtensions(a, missing, "which this project requires")
 	}
 
 	phar, err := c.Source.Ensure(ctx, h.ComposerDir(), a.Version, info.Version, func(r composer.Release) {
@@ -84,7 +91,13 @@ func (c *Composer) Run(ctx context.Context, dir string, args []string) (int, err
 
 	// Composer may exit 0 even so: Symfony Flex reports a failed update after
 	// create-project without failing the command.
-	if len(out.Missing) == 0 || !c.offerExtensions(a.Version, out.Missing, "which this project needs") {
+	var missing []string
+	for _, ext := range out.Missing {
+		if !offered[phpext.Name(ext)] {
+			missing = append(missing, ext)
+		}
+	}
+	if len(missing) == 0 || !c.offerExtensions(a, missing, "which this project needs") {
 		return code, nil
 	}
 	// Composer only creates a project in a new or empty directory, so
@@ -98,15 +111,38 @@ func (c *Composer) Run(ctx context.Context, dir string, args []string) (int, err
 	return c.Exec(a.Binary, phpArgs, env, io.Discard)
 }
 
-// offerExtensions asks to install exts for version and reports whether they
-// were installed. It never fails the command: at worst Composer fails as it
-// would have without pvm.
-func (c *Composer) offerExtensions(version string, exts []string, why string) bool {
+// missingForProject lists the extensions the project in dir requires that
+// info's PHP lacks, when Composer is about to check them (install, update)
+// and the user can be asked. Each one is marked in offered.
+func (c *Composer) missingForProject(dir string, args []string, info sysphp.Info, offered map[string]bool) []string {
+	r, ok := composer.RequirementsFor(args)
+	if !ok || c.Confirm == nil {
+		return nil
+	}
+	var missing []string
+	for _, ext := range composer.RequiredExtensions(dir, r, c.Getenv) {
+		if !info.Has(ext) && !offered[ext] {
+			offered[ext] = true
+			missing = append(missing, ext)
+		}
+	}
+	return missing
+}
+
+// offerExtensions asks to install exts for a and reports whether they were
+// installed. It never fails the command: at worst Composer fails as it would
+// have without pvm. A version installed outside pvm is left as it is.
+func (c *Composer) offerExtensions(a Active, exts []string, why string) bool {
+	version := a.Version
 	what := "the " + exts[0] + " extension"
 	if len(exts) > 1 {
 		what = "the " + strings.Join(exts, ", ") + " extensions"
 	}
 	fmt.Fprintf(c.Notices, "PHP %s is missing %s, %s.\n", version, what, why)
+	if a.System {
+		fmt.Fprintln(c.Notices, "It was installed outside pvm, so pvm does not change it: add them with the tool that installed it, or install a PHP version with pvm.")
+		return false
+	}
 	if c.Confirm == nil {
 		fmt.Fprintln(c.Notices, "Run pvm composer in a terminal to let pvm install it.")
 		return false

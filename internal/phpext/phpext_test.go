@@ -16,3 +16,16 @@ func TestNormalize(t *testing.T) {
 		}
 	}
 }
+
+func TestName(t *testing.T) {
+	for in, want := range map[string]string{
+		"ext-PDO_MySQL": "pdo_mysql",
+		"dom":           "dom",
+		"Zend OPcache":  "opcache",
+		" Xdebug ":      "xdebug",
+	} {
+		if got := Name(in); got != want {
+			t.Errorf("Name(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

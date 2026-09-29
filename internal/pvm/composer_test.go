@@ -138,6 +138,33 @@ func TestComposerRun(t *testing.T) {
 		}
 	})
 
+	t.Run("offers the project's extensions up front", func(t *testing.T) {
+		c, ext, calls := newTestComposer(t,
+			fakeRun{stderr: "x requires ext-intl * -> it is missing from your system.\n", code: 2})
+		c.Probe = func(string) (sysphp.Info, error) {
+			return sysphp.Info{Version: "8.5.1", Zip: true, Extensions: []string{"mbstring", "zip"}}, nil
+		}
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "composer.json"),
+			[]byte(`{"require": {"ext-intl": "*", "ext-mbstring": "*"}}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		var asked []string
+		c.Confirm = func(p string) bool { asked = append(asked, p); return false }
+		var out bytes.Buffer
+		c.Notices = &out
+		code, err := c.Run(context.Background(), dir, []string{"install"})
+		if err != nil || code != 2 {
+			t.Fatalf("Run = (%d, %v)", code, err)
+		}
+		// Declined before the run: not asked again when Composer reports it.
+		if len(asked) != 1 || !strings.Contains(out.String(), "missing the intl extension, which this project requires") ||
+			ext.added != nil || len(*calls) != 1 {
+			t.Errorf("asked %d times, added = %v, runs = %d, output = %q", len(asked), ext.added, len(*calls), out.String())
+		}
+	})
+
 	t.Run("no version selected", func(t *testing.T) {
 		c, _, _ := newTestComposer(t)
 		if err := c.Manager.Home.ClearCurrent(); err != nil {
@@ -155,7 +182,7 @@ func TestOfferExtensions(t *testing.T) {
 		var out bytes.Buffer
 		c.Confirm, c.Notices = nil, &out
 
-		if c.offerExtensions("8.3", []string{"zip"}, "which Composer needs") {
+		if c.offerExtensions(Active{Version: "8.3"}, []string{"zip"}, "which Composer needs") {
 			t.Error("reported installed")
 		}
 		if !strings.Contains(out.String(), "PHP 8.3 is missing the zip extension, which Composer needs") ||
@@ -169,11 +196,24 @@ func TestOfferExtensions(t *testing.T) {
 		var out bytes.Buffer
 		c.Notices = &out
 
-		if !c.offerExtensions("8.5", []string{"xml", "intl"}, "x") {
+		if !c.offerExtensions(Active{Version: "8.5"}, []string{"xml", "intl"}, "x") {
 			t.Errorf("not installed, output = %q", out.String())
 		}
 		if strings.Join(ext.added, ",") != "xml,intl" || !strings.Contains(out.String(), "the xml, intl extensions") {
 			t.Errorf("added %v, output = %q", ext.added, out.String())
+		}
+	})
+
+	t.Run("installed outside pvm", func(t *testing.T) {
+		c, ext, _ := newTestComposer(t)
+		var out bytes.Buffer
+		c.Notices = &out
+
+		if c.offerExtensions(Active{Version: "8.3", System: true}, []string{"intl"}, "x") {
+			t.Error("reported installed")
+		}
+		if !strings.Contains(out.String(), "installed outside pvm") || ext.added != nil {
+			t.Errorf("output = %q, added = %v", out.String(), ext.added)
 		}
 	})
 
@@ -183,7 +223,7 @@ func TestOfferExtensions(t *testing.T) {
 		c.Notices = &out
 		ext.err = errors.New("boom")
 
-		if c.offerExtensions("8.5", []string{"xml"}, "x") {
+		if c.offerExtensions(Active{Version: "8.5"}, []string{"xml"}, "x") {
 			t.Error("reported installed")
 		}
 		if !strings.Contains(out.String(), "Warning: boom") {
