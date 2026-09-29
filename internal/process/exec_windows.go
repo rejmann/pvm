@@ -1,6 +1,4 @@
-//go:build windows
-
-package cmd
+package process
 
 import (
 	"errors"
@@ -9,8 +7,8 @@ import (
 	"os/exec"
 )
 
-// execBinary runs bin with inherited stdio and exits with its exit code.
-func execBinary(bin string, args []string) error {
+// Exec runs bin with inherited stdio and exits with its exit code.
+func Exec(bin string, args []string) error {
 	c := exec.Command(bin, args...)
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 
@@ -24,4 +22,10 @@ func execBinary(bin string, args []string) error {
 	}
 	os.Exit(0)
 	return nil
+}
+
+const exeSuffix = ".exe"
+
+func isExecutable(os.FileInfo) bool {
+	return true
 }

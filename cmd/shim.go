@@ -2,11 +2,9 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
+	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
@@ -29,48 +27,9 @@ func runShim(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	bin, err := shimTarget(newManager(cmd), dir, os.Getenv(pvm.EnvVersion), os.Getenv("PATH"))
+	bin, err := newManager(cmd).Shim(dir, os.Getenv(pvm.EnvVersion), os.Getenv("PATH"))
 	if err != nil {
 		return err
 	}
-	return execBinary(bin, args[1:])
-}
-
-// shimTarget returns the php binary the shim should run. When no version is
-// selected anywhere, it falls back to the first php on PATH outside pvm.
-func shimTarget(m *pvm.Manager, dir, env, path string) (string, error) {
-	a, err := m.Active(dir, env)
-	if err == nil {
-		return a.Binary, nil
-	}
-	if !errors.Is(err, pvm.ErrNoActiveVersion) {
-		return "", err
-	}
-
-	if bin := lookPathExcluding("php", path, m.Home.ShimDir()); bin != "" {
-		return bin, nil
-	}
-	return "", fmt.Errorf("%w and no system php found — run: pvm use <version>", err)
-}
-
-// lookPathExcluding is exec.LookPath restricted to PATH entries other than skip.
-func lookPathExcluding(name, path, skip string) string {
-	name += exeSuffix
-	skip = filepath.Clean(skip)
-
-	for _, dir := range filepath.SplitList(path) {
-		if dir == "" || strings.EqualFold(filepath.Clean(dir), skip) {
-			continue
-		}
-		p := filepath.Join(dir, name)
-		fi, err := os.Stat(p)
-		if err != nil || fi.IsDir() {
-			continue
-		}
-		if !isExecutable(fi) {
-			continue
-		}
-		return p
-	}
-	return ""
+	return process.Exec(bin, args[1:])
 }

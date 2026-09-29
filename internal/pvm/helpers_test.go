@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/rejmann/pvm/internal/home"
@@ -110,4 +111,17 @@ func mkdirAll(t *testing.T, dir string) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func fakeExecutable(t *testing.T, dir, name string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	mkdirAll(t, dir)
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, nil, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

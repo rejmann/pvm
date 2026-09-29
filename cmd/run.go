@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
@@ -65,7 +66,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err := os.Setenv(pvm.EnvVersion, a.Version); err != nil {
 		return err
 	}
-	return execBinary(a.Binary, rest)
+	return process.Exec(a.Binary, rest)
 }
 
 // splitRunArgs separates the optional version from the php arguments. The

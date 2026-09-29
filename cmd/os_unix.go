@@ -5,18 +5,10 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
 )
-
-// exeSuffix is appended to program names looked up on PATH.
-const exeSuffix = ""
 
 // phpInHome is true when the PHP builds live in the pvm home and so go with it.
 const phpInHome = false
-
-func isExecutable(fi os.FileInfo) bool {
-	return fi.Mode()&0111 != 0
-}
 
 // printPathSetup tells how to put the shim directory on PATH.
 func printPathSetup(out io.Writer, shimDir string) {
