@@ -95,37 +95,51 @@ func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 	return nil
 }
 
-// RemoveExtensions uninstalls the formulas pvm installed for exts.
-func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
+// RemoveExtensions uninstalls the formulas pvm installed for exts. The others
+// ship with php@X.Y: the ones a conf.d file loads (e.g. opcache) are disabled
+// instead, the ones compiled in cannot be removed.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) (phpext.Removal, error) {
+	var r phpext.Removal
 	branch := version.Branch(ver)
 	owned := h.Packages(ver)
+	bin, err := h.Binary(ver)
+	if err != nil {
+		return r, err
+	}
 
-	var formulas, foreign []string
+	var formulas, toDisable []string
 	for _, ext := range exts {
 		formula := extTap + phpext.Name(ext) + "@" + branch
 		switch {
-		case slices.Contains(formulas, formula):
 		case slices.Contains(owned, formula):
-			formulas = append(formulas, formula)
+			r.Uninstalled = append(r.Uninstalled, ext)
+			if !slices.Contains(formulas, formula) {
+				formulas = append(formulas, formula)
+			}
+		case confdLoads(bin, ext):
+			toDisable = append(toDisable, ext)
 		default:
-			foreign = append(foreign, ext)
+			r.Stuck = append(r.Stuck, ext)
 		}
-	}
-	if len(foreign) > 0 {
-		return fmt.Errorf("pvm did not install %s for PHP %s, so it does not remove it", strings.Join(foreign, ", "), ver)
 	}
 
 	for _, formula := range formulas {
 		cmd := exec.Command("brew", "uninstall", formula)
 		cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("brew uninstall %s: %w", formula, err)
+			return phpext.Removal{}, fmt.Errorf("brew uninstall %s: %w", formula, err)
 		}
 		if err := h.RemovePackages(ver, []string{formula}); err != nil {
-			return fmt.Errorf("record removed extensions: %w", err)
+			return phpext.Removal{}, fmt.Errorf("record removed extensions: %w", err)
 		}
 	}
-	return nil
+	if len(toDisable) > 0 {
+		if err := setConfdEnabled(bin, toDisable, false, s.Stderr); err != nil {
+			return phpext.Removal{Uninstalled: r.Uninstalled}, err
+		}
+		r.Disabled = toDisable
+	}
+	return r, nil
 }
 
 // SetExtensionsEnabled turns exts on or off by renaming their file in the

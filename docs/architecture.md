@@ -237,7 +237,9 @@ cmd.extTarget                                ← builds pvm.Extensions with inst
   └─ pvm.Extensions.Version(-v, cwd, $PVM_VERSION)  ← Manager.Select; refuses versions installed outside pvm
 list    → Probe → loaded extensions
 add     → Probe → skip loaded → installer.System.AddExtensions → home.AddPackages
-remove  → installer.System.RemoveExtensions (only recorded/base packages) → home.RemovePackages
+remove  → installer.System.RemoveExtensions → phpext.Removal
+            recorded/base packages → uninstall → home.RemovePackages
+            shipped with PHP (an .ini loads them) → disable · compiled in → error
 enable / disable → installer.System.SetExtensionsEnabled
                    (apt: phpenmod/phpdismod · Remi, zypper, pacman, brew: rename in the ini scan dir · Windows: php.ini)
 ```

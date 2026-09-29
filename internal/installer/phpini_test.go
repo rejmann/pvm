@@ -119,8 +119,8 @@ func TestDisableIniExtensions(t *testing.T) {
 		writeFile(t, filepath.Join(dir, "php.ini"), ini)
 		writeFile(t, filepath.Join(dir, "ext", "php_xdebug.dll"), "")
 
-		if err := disableIniExtensions(dir, []string{"xdebug"}, false); err != nil {
-			t.Fatal(err)
+		if missing, err := disableIniExtensions(dir, []string{"xdebug"}); err != nil || missing != nil {
+			t.Fatalf("disableIniExtensions = (%v, %v)", missing, err)
 		}
 		data, _ := os.ReadFile(filepath.Join(dir, "php.ini"))
 		if got := string(data); got != "extension=php_zip.dll\n;zend_extension=xdebug\n;extension=intl\n" {
@@ -137,16 +137,17 @@ func TestDisableIniExtensions(t *testing.T) {
 		}
 	})
 
-	t.Run("drops and reports what is not enabled", func(t *testing.T) {
+	t.Run("reports what php.ini has no line for", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, "php.ini"), ini)
 
-		err := disableIniExtensions(dir, []string{"ext-zip", "intl"}, true)
-		if err == nil || !strings.Contains(err.Error(), "intl not enabled") {
-			t.Errorf("error = %v, want intl reported", err)
+		// intl is already commented out: nothing to do, but not missing.
+		missing, err := disableIniExtensions(dir, []string{"ext-zip", "intl", "calendar"})
+		if err != nil || strings.Join(missing, ",") != "calendar" {
+			t.Errorf("disableIniExtensions = (%v, %v), want calendar missing", missing, err)
 		}
 		data, _ := os.ReadFile(filepath.Join(dir, "php.ini"))
-		if got := string(data); got != "zend_extension=xdebug\n;extension=intl\n" {
+		if got := string(data); got != ";extension=php_zip.dll\nzend_extension=xdebug\n;extension=intl\n" {
 			t.Errorf("php.ini = %q", got)
 		}
 	})

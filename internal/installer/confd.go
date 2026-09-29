@@ -73,6 +73,17 @@ func confdFile(dir, ext string) (path string, enabled bool, err error) {
 	return "", false, fs.ErrNotExist
 }
 
+// confdLoads reports whether a file of the scan directory of the PHP at bin
+// loads ext, enabled or disabled by pvm.
+func confdLoads(bin, ext string) bool {
+	dir, err := iniScanDir(bin)
+	if err != nil {
+		return false
+	}
+	_, _, err = confdFile(dir, phpext.Name(ext))
+	return err == nil
+}
+
 // setConfdEnabled turns exts on or off for the PHP at bin by renaming the
 // file of its scan directory that loads each one, through sudo when the
 // directory belongs to root.

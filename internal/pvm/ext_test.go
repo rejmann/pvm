@@ -6,18 +6,20 @@ import (
 	"testing"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/sysphp"
 )
 
 type fakeExtManager struct {
 	fakeExtensions
 	removed []string
-	toggled []string // "ext=on" or "ext=off"
+	removal phpext.Removal // what RemoveExtensions reports
+	toggled []string       // "ext=on" or "ext=off"
 }
 
-func (f *fakeExtManager) RemoveExtensions(_ *home.Dir, _ string, exts []string) error {
+func (f *fakeExtManager) RemoveExtensions(_ *home.Dir, _ string, exts []string) (phpext.Removal, error) {
 	f.removed = append(f.removed, exts...)
-	return f.err
+	return f.removal, f.err
 }
 
 func (f *fakeExtManager) SetExtensionsEnabled(_ *home.Dir, _ string, exts []string, enabled bool) error {
@@ -100,7 +102,7 @@ func TestExtensionsRemoveAndToggle(t *testing.T) {
 	e, inst := newTestExtensions(t)
 	a, _ := e.Version("", t.TempDir(), "", false)
 
-	if err := e.Remove(a, []string{"ext-Redis", "redis"}); err != nil {
+	if _, err := e.Remove(a, []string{"ext-Redis", "redis"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.SetEnabled(a, []string{"Xdebug"}, false); err != nil {
@@ -111,5 +113,20 @@ func TestExtensionsRemoveAndToggle(t *testing.T) {
 	}
 	if strings.Join(inst.removed, ",") != "redis" || strings.Join(inst.toggled, ",") != "xdebug=off,xdebug=on" {
 		t.Errorf("removed = %v, toggled = %v", inst.removed, inst.toggled)
+	}
+}
+
+func TestExtensionsRemoveStuck(t *testing.T) {
+	e, inst := newTestExtensions(t, "calendar", "core") // sorted, as Probe returns them
+	inst.removal = phpext.Removal{Disabled: []string{"calendar"}, Stuck: []string{"core", "redsi"}}
+	a, _ := e.Version("", t.TempDir(), "", false)
+
+	r, err := e.Remove(a, []string{"calendar", "core", "redsi"})
+	if strings.Join(r.Disabled, ",") != "calendar" {
+		t.Errorf("removal = %+v", r)
+	}
+	if err == nil || !strings.Contains(err.Error(), "core is compiled into PHP 8.4") ||
+		!strings.Contains(err.Error(), "PHP 8.4 has no redsi extension") {
+		t.Errorf("error = %v", err)
 	}
 }

@@ -42,3 +42,10 @@ func Normalize(ext string) string {
 	}
 	return ext
 }
+
+// Removal is what removing extensions did with each one.
+type Removal struct {
+	Uninstalled []string // pvm had installed them: uninstalled
+	Disabled    []string // ship with PHP (or pvm did not install them): turned off instead
+	Stuck       []string // no package or .ini to act on: compiled into PHP, or not there at all
+}
