@@ -33,6 +33,10 @@ func removeVersion(m *pvm.Manager, v string, out, errOut io.Writer) error {
 	if r.WasCurrent {
 		fmt.Fprintf(errOut, "Warning: PHP %s was the active version. No version is now active.\n", v)
 	}
+	if r.System {
+		fmt.Fprintf(out, "PHP %s is no longer managed by pvm; it was installed outside pvm and stays on the system.\n", v)
+		return nil
+	}
 	fmt.Fprintf(out, "PHP %s removed.\n", v)
 	return nil
 }

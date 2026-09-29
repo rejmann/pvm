@@ -18,6 +18,7 @@ type Active struct {
 	Version string // installed version, e.g. "8.3"
 	Binary  string // path to the php binary
 	Source  string // human-readable origin: env var, .php-version path or "global"
+	System  bool   // installed outside pvm and adopted by it
 }
 
 // Global reports whether the version comes from pvm use rather than a
@@ -46,7 +47,7 @@ func (m *Manager) Active(dir, env string) (Active, error) {
 	if err != nil {
 		return Active{}, err
 	}
-	return Active{Version: installed, Binary: bin, Source: source}, nil
+	return Active{Version: installed, Binary: bin, Source: source, System: m.Home.System(installed)}, nil
 }
 
 func (m *Manager) requested(dir, env string) (v, source string, err error) {
@@ -62,7 +63,7 @@ func (m *Manager) requested(dir, env string) (v, source string, err error) {
 		return "", "", err
 	}
 
-	v, err = m.Home.Current()
+	v, err = m.current()
 	if err == nil {
 		return v, sourceGlobal, nil
 	}
@@ -91,7 +92,7 @@ func (m *Manager) Lookup(arg string) (Active, error) {
 	if bin == "" {
 		return Active{}, errors.New("empty binary path for PHP " + installed)
 	}
-	return Active{Version: installed, Binary: bin, Source: "argument"}, nil
+	return Active{Version: installed, Binary: bin, Source: "argument", System: m.Home.System(installed)}, nil
 }
 
 // Select returns the version to run: arg when given, otherwise the version

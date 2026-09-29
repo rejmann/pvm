@@ -28,9 +28,11 @@ self-update, --rollback or global require for one version never affect another.
 Only the download cache is shared. COMPOSER_HOME / COMPOSER_CACHE_DIR, if set,
 are respected. pvm remove deletes a version's Composer with it.
 
-If Composer stops because the PHP version lacks an extension the project
-needs (ext-xml, ext-intl...), pvm offers to install it for that version and
-runs the same command again. Likewise, if the zip extension is missing and
+Before install and update, pvm checks the ext-* requirements of composer.json
+(and, for install, composer.lock) against the PHP version and offers to install
+the missing ones. If Composer still stops because the version lacks an
+extension (ext-xml, ext-intl...), pvm offers to install it and runs the same
+command again. Likewise, if the zip extension is missing and
 neither unzip nor 7z is available, pvm offers to install it up front.
 
 PVM_VERSION is set for the process, so scripts Composer runs that call php

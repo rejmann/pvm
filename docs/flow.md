@@ -67,7 +67,9 @@ Three ideas carry the whole design:
 | Path | Holds | Written by | Read by | Removed by |
 |------|-------|------------|---------|------------|
 | `versions/<v>/binary` | path of the php binary for `<v>` (e.g. `/usr/bin/php8.3`) | `install` | every command that needs a version | `remove`, `self-remove` |
-| `current-version` | the global version, e.g. `8.3` | `use` | `list`, `current`, `which`, `run`, `composer`, the shim | `remove` of the active version (Linux/macOS), `self-remove` |
+| `current-version` | the global version, e.g. `8.3` | `use`, or the first run when adopting the PHP installed before pvm | `list`, `current`, `which`, `run`, `composer`, the shim | `remove` of the active version (Linux/macOS), `self-remove` |
+| `versions/<v>/system` | empty marker: `<v>` was installed outside pvm and only adopted — `remove` forgets it, never uninstalls it | first run (adoption) | `list`, `current`, `remove`, `self-remove` | `remove`, `self-remove` |
+| `system-checked` | empty marker: pvm already looked for a PHP installed before it | first run | every command that reads the global version | `self-remove` |
 | `bin/php` (Linux) · `shims/php` (macOS) | `#!/bin/sh` shim: `exec pvm shim php "$@"` | `use` | the shell, via `PATH` | `self-remove` |
 | `shims\php.bat` (Windows) | batch shim running `php\<current-version>\php.exe` | `use` | the shell, via `PATH` | `self-remove` |
 | `php\<branch>\` (Windows) | the extracted PHP build, with the `php.ini` pvm writes | `install` | the shims, via `binary` | `remove`, `self-remove` |
@@ -81,7 +83,7 @@ Outside `<pvm-home>`, pvm touches only what the platform requires:
 
 | Where | What | Set by | Undone by |
 |-------|------|--------|-----------|
-| Linux system packages | `php<X.Y>-cli` and the extension packages listed in `versions/<X.Y>/packages` (apt/dnf/yum) | `install` (`sudo`) | `remove`, `self-remove --php` |
+| Linux system packages | `php<X.Y>-cli` and the extension packages listed in `versions/<X.Y>/packages` (apt/dnf/yum/zypper) | `install`, `ext add` (`sudo`, password asked once) | `remove`, `ext remove`, `self-remove --php` |
 | Linux `update-alternatives` | `/usr/bin/php` → the global version, for services that don't use the shim | `use` (`sudo`) | `remove` of the active version (`--auto`) |
 | `~/.local/bin/php` (Linux) | updated **only if it already is a symlink** | `use` | — |
 | Homebrew | `php@X.Y` | `install` | `remove`, `self-remove --php` |
@@ -209,13 +211,17 @@ Composer is never installed globally and never at `pvm install` time. Each PHP v
 ```mermaid
 flowchart TD
     A["pvm composer #lt;args#gt;"] --> B["resolve version (§3.5)<br/>pvm-managed only"]
-    B --> C["probe php: exact version<br/>+ is the zip extension loaded?"]
+    B --> C["probe php: exact version<br/>+ loaded extensions"]
     C --> D{"zip missing and no<br/>unzip / 7z on PATH?"}
     D -- yes, terminal --> D1["ask: Install it now? [y/N]<br/>yes → same extension install as pvm install"]
     D -- yes, no terminal --> D2["print notice only"]
-    D -- no --> E
-    D1 --> E
-    D2 --> E
+    D -- no --> P
+    D1 --> P
+    D2 --> P
+    P{"install / update, terminal:<br/>ext-* of composer.json / .lock<br/>not loaded?"}
+    P -- yes --> P1["ask: Install now? [y/N]<br/>(not asked again after the run)"]
+    P -- no --> E
+    P1 --> E
     E{"composer/php/#lt;v#gt;/composer.phar<br/>exists?"}
     E -- yes --> H
     E -- no --> F1["GET getcomposer.org/versions"]
@@ -239,13 +245,14 @@ flowchart TD
 - **Verification**: a phar whose signature doesn't match Composer's release key is rejected and nothing is saved.
 - **Isolation**: the phar and `COMPOSER_HOME` are per PHP version, so `self-update`, `self-update --2.2`, `--rollback` and `global require` for one version cannot break another. Only the download cache is shared, since packages don't depend on PHP. As a consequence, credentials set with `config --global` (`auth.json`) are per version too; a project `auth.json` or `COMPOSER_AUTH` work for all versions.
 - **Updating Composer** is `pvm composer self-update`; pvm itself never replaces an existing phar.
-- **Missing extensions** are detected from Composer's own output, not its exit code (Symfony Flex exits 0 after a failed update in `create-project`). Accepted ones are installed for that PHP version and the command runs again; a `create-project` directory is emptied first, which is safe because Composer only creates projects in a new or empty directory.
+- **Required extensions** of `composer.json` / `composer.lock` are checked before `install` and `update`, so the common case is fixed before Composer runs.
+- **Missing extensions** are also detected from Composer's own output, not its exit code (Symfony Flex exits 0 after a failed update in `create-project`). Accepted ones are installed for that PHP version and the command runs again; a `create-project` directory is emptied first, which is safe because Composer only creates projects in a new or empty directory.
 - Composer's own requirements still apply: `git` for source installs; extraction is covered by the zip extension from [§3.2](#32-install--pvm-install).
 
 ### 3.9 Remove — `pvm remove`
 
 1. The version must be given exactly as installed (see `pvm list`).
-2. Uninstalls it: Linux removes the extension packages pvm installed, then `php<X.Y>-cli`; macOS `brew uninstall php@X.Y`; Windows deletes `php\<branch>\`.
+2. Uninstalls it: Linux removes the extension packages pvm installed, then `php<X.Y>-cli`; macOS the extension formulas pvm installed, then `brew uninstall php@X.Y`; Windows deletes `php\<branch>\`.
 3. Deletes `versions/<v>/` and `composer/php/<v>/`.
 4. If it was the active global version: Linux runs `update-alternatives --auto php`; Linux/macOS delete `current-version`; a warning says no version is active. **Windows:** `current-version` is currently left in place (removing the global version there is not implemented yet), so `pvm use <other>` should follow.
 
@@ -309,6 +316,7 @@ Linux, starting from nothing:
 
 - **Nothing global, no hidden state.** Everything pvm creates is under `<pvm-home>` or is a package it installed through the package manager — and pvm removes it. It never edits shell config files on Linux/macOS; the PATH line is the user's.
 - **Explicit over clever.** A selected version that isn't installed is an error, never a silent fallback. Only the `php` shim falls back to the system PHP, and only when nothing is selected at all.
+- **The PHP you already had keeps working.** On its first run pvm adopts the `php` already on `PATH` as the global version (recorded, not reinstalled), so it is current without `pvm use`. pvm never uninstalls what it didn't install.
 - **Per-call resolution.** No "current shell" state: the same command in two directories can use two versions, and `PVM_VERSION` overrides for a single call.
 - **Only what's needed on the machine.** Composer's extraction needs are met by the PHP pvm installs; Composer itself is downloaded on first use and verified with its publisher's key.
 - **Failures don't leave half states.** Binaries, phars and caches are written to a temp file and renamed into place.

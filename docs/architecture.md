@@ -21,7 +21,7 @@ pvm/
 ├── cmd/                        # Cobra commands: one file per command
 │   ├── root.go                 # NewRootCmd(version): the command tree, no globals
 │   ├── available.go  install.go  list.go  use.go  remove.go
-│   ├── current.go  which.go  run.go  shim.go  composer.go
+│   ├── current.go  which.go  run.go  shim.go  composer.go  ext.go
 │   ├── self_upgrade.go  self_remove.go
 │   ├── manager.go  lts_resolver.go  # shared by several commands: newManager()
 │   ├── run/                    # helpers of run.go: SplitArgs, CheckFile
@@ -36,22 +36,27 @@ pvm/
     │   ├── install.go  use.go  remove.go  list.go
     │   ├── active.go           # Active, Lookup, Select: which PHP runs where
     │   ├── shim.go             # Shim: the php the shim runs, system php as fallback
-    │   └── composer.go         # Composer: pvm composer, missing extensions, retry
+    │   ├── system.go           # adopts the PHP installed before pvm as the global version
+    │   ├── composer.go         # Composer: pvm composer, missing extensions, retry
+    │   └── ext.go              # Extensions: pvm ext, the ExtensionManager interface
     ├── home/                   # the pvm data directory and its whole layout
     ├── installer/              # installs PHP: System per OS (build tags)
     │   ├── linux.go            # apt / dnf / yum / pacman / zypper via sudo
-    │   ├── brew.go             # macOS: Homebrew
+    │   ├── brew.go             # macOS: Homebrew (+ shivammathur/extensions)
     │   ├── windows.go          # windows.php.net builds (+ windows_download.go)
+    │   ├── confd.go            # Linux/macOS: turn extensions on/off in the ini scan dir
     │   └── phpini.go           # php.ini for the Windows builds
     ├── shim/                   # switches the global version: Activator per OS
     │   ├── activate_linux.go   # shim + update-alternatives
     │   ├── activate_darwin.go  # shim
     │   ├── activate_windows.go # php.bat, user PATH, PowerShell wrapper (pswrapper.go)
     │   └── shim_unix.go        # the #!/bin/sh php shim
-    ├── composer/               # composer.phar download + signature, env, Output parser
+    ├── composer/               # composer.phar download + signature, env, Output parser,
+    │                           #   platform.go: the ext-* a project requires
+    ├── sudo/                   # Authenticate once (sudo -v), Command: runs as root
     ├── process/                # Exec (replace pvm), Run (child), LookPath
     ├── phpnet/                 # php.net releases API + 24 h cache
-    ├── sysphp/                 # PHP outside pvm: Detect, Probe
+    ├── sysphp/                 # PHP outside pvm: Detect, OnPath, Probe
     ├── phpext/                 # extension names: base set, aliases (ext-dom → xml)
     ├── project/                # .php-version lookup
     ├── selfupdate/             # pvm's own releases: download, swap, remove
@@ -66,12 +71,14 @@ flowchart LR
     cmd --> pvm
     cmd --> installer & shim & composer & process & sysphp & phpnet & selfupdate & home
     pvm --> home & composer & process & project & sysphp & version
-    installer --> home & phpext & phpnet & version
-    shim --> home & version
+    installer --> home & phpext & phpnet & sudo & version
+    shim --> home & sudo & version
     composer & home & phpnet & sysphp --> version
+    composer & sysphp --> phpext
+    sysphp --> process
 ```
 
-(`installer → phpnet` and `shim → version` exist only in the Windows build.)
+(`installer → phpnet` and `shim → version` exist only in the Windows build, `installer → sudo` and `shim → sudo` only in the Linux build.)
 
 `cmd` is the only package that knows every other one: it builds the concrete installer, activator, Composer downloader and process runner and hands them to `internal/pvm`. Nothing in `internal/` imports `cmd`, and `internal/pvm` never imports `installer` or `shim`.
 
@@ -83,7 +90,8 @@ flowchart LR
 
 ```
 ~/.pvm/                        (or $PVM_HOME)
-├── current-version            # plain text: "8.3" — written by pvm use
+├── current-version            # plain text: "8.3" — written by pvm use (or adoption)
+├── system-checked             # marker: pvm already looked for a PHP installed before it
 ├── cache/
 │   └── available.json         # php.net branches, cached for 24 h
 ├── composer/                  # created by `pvm composer`
@@ -99,7 +107,8 @@ flowchart LR
 └── versions/
     ├── 8.3/
     │   ├── binary             # plain text: /usr/bin/php8.3
-    │   └── packages           # extension packages pvm installed (Linux)
+    │   ├── packages           # extension packages pvm installed (Linux)
+    │   └── system             # marker: installed outside pvm, adopted (never uninstalled)
     └── 8.4/
         └── binary             # plain text: /usr/bin/php8.4
 ```
@@ -212,8 +221,9 @@ pvm run [version] file  → pvm.Manager.Select(version, cwd, env) → process.Ex
 cmd.runComposer                              ← builds pvm.Composer with its dependencies
   └─ pvm.Composer.Run(ctx, cwd, args)
        ├─ Manager.Active(cwd, $PVM_VERSION)  ← pvm-managed only, no system php
-       ├─ Probe = sysphp.Probe → exact version + extension_loaded("zip")
+       ├─ Probe = sysphp.Probe → exact version + loaded extensions
        ├─ no zip and !CanUnzip → offerExtensions(["zip"])
+       ├─ install/update → composer.RequiredExtensions(composer.json, .lock) − loaded → offerExtensions
        ├─ Source = composer.Downloader.Ensure(home.ComposerDir(), installed, exact)
        │    └─ missing phar → getcomposer.org/versions → SelectRelease → phar + .sig (RSA-SHA384)
        ├─ composer.Env() + PVM_VERSION
@@ -222,6 +232,20 @@ cmd.runComposer                              ← builds pvm.Composer with its de
             → emptyDir(Output.Project) for create-project → run again
   └─ os.Exit(code)
 ```
+
+## Data flow — `pvm ext`
+
+```
+cmd.extTarget                                ← builds pvm.Extensions with installer.System + sysphp.Probe
+  └─ pvm.Extensions.Version(-v, cwd, $PVM_VERSION)  ← Manager.Select; refuses versions installed outside pvm
+list    → Probe → loaded extensions
+add     → Probe → skip loaded → installer.System.AddExtensions → home.AddPackages
+remove  → installer.System.RemoveExtensions (only recorded/base packages) → home.RemovePackages
+enable / disable → installer.System.SetExtensionsEnabled
+                   (apt: phpenmod/phpdismod · Remi, zypper, pacman, brew: rename in the ini scan dir · Windows: php.ini)
+```
+
+Every root command on Linux goes through `sudo.Command`, after one `sudo.Authenticate` per operation: the password is asked once, before anything runs.
 
 ## Data flow — `pvm self-upgrade [tag]`
 
@@ -248,7 +272,7 @@ cmd.runSelfRemove
 
 ## Key design decisions
 
-- **Use cases in `internal/pvm`, behind small interfaces** — install, use, remove, version resolution and the Composer flow are tested with fakes of `Installer`, `Activator`, `ExtensionInstaller` and `ComposerSource`, so the rules (including a successful `pvm use`, which on Linux runs `sudo update-alternatives`) are covered without touching the system.
+- **Use cases in `internal/pvm`, behind small interfaces** — install, use, remove, version resolution and the Composer flow are tested with fakes of `Installer`, `Activator`, `ExtensionInstaller`, `ExtensionManager` and `ComposerSource`, so the rules (including a successful `pvm use`, which on Linux runs `sudo update-alternatives`) are covered without touching the system.
 - **One type per OS, chosen by build tags** — `installer.System` and `shim.Activator` have one implementation per OS file. Supporting a new platform means adding files, not editing `switch` statements.
 - **`internal/home` owns the layout** — installers record binaries and packages through it, Composer and the php.net cache get their paths from it, and `pvm self-remove` deletes one directory. The default location (`$PVM_HOME`, `~/.pvm`, `%LOCALAPPDATA%\pvm`) is decided there too.
 - **Windows: direct download instead of a package manager** — winget treats all PHP versions as the same product (shared Windows Installer GUID), making side-by-side installs impossible. Downloading zips from `windows.php.net` lets pvm own every version in its own isolated directory.

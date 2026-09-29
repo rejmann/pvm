@@ -15,6 +15,7 @@ type Listing struct {
 
 // List returns the installed versions and the system PHP pvm does not manage.
 func (m *Manager) List() (Listing, error) {
+	m.adoptSystem()
 	managed, err := m.Home.Versions()
 	if err != nil {
 		return Listing{}, fmt.Errorf("read installed versions: %w", err)

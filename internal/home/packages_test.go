@@ -22,6 +22,19 @@ func TestPackages(t *testing.T) {
 	if got := d.Packages("8.3"); got != nil {
 		t.Errorf("other version has packages %v", got)
 	}
+
+	if err := d.RemovePackages("8.4", []string{"php8.4-xml", "php8.4-redis"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(d.Packages("8.4"), ","); got != "php8.4-zip,php8.4-intl" {
+		t.Errorf("packages after remove = %s", got)
+	}
+	if err := d.RemovePackages("8.4", []string{"php8.4-zip", "php8.4-intl"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Packages("8.4"); got != nil {
+		t.Errorf("packages after removing all = %v", got)
+	}
 }
 
 func TestSetBinary(t *testing.T) {

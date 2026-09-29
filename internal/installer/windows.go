@@ -79,3 +79,19 @@ func resolveFullVersion(ver, branch string) (string, error) {
 func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 	return enableIniExtensions(h.PHPDir(version.Branch(ver)), exts)
 }
+
+// RemoveExtensions stops the php.ini of installed version ver from loading
+// exts. Their DLLs ship with the PHP build, so nothing is deleted.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
+	return disableIniExtensions(h.PHPDir(version.Branch(ver)), exts, true)
+}
+
+// SetExtensionsEnabled comments exts out of, or back into, the php.ini of
+// installed version ver.
+func (s *System) SetExtensionsEnabled(h *home.Dir, ver string, exts []string, enabled bool) error {
+	dir := h.PHPDir(version.Branch(ver))
+	if enabled {
+		return enableIniExtensions(dir, exts)
+	}
+	return disableIniExtensions(dir, exts, false)
+}

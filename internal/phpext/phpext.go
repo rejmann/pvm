@@ -22,10 +22,21 @@ var aliases = map[string]string{
 	"pdo_sqlite": "sqlite3",
 }
 
-// Normalize lowercases ext, drops Composer's "ext-" prefix and resolves
-// extensions that ship inside another one's package (dom → xml).
-func Normalize(ext string) string {
+// Name is the extension as PHP loads it: lowercased and without Composer's
+// "ext-" prefix (ext-PDO_MySQL → pdo_mysql). "Zend OPcache", as PHP lists it,
+// is opcache.
+func Name(ext string) string {
 	ext = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), "ext-")
+	if ext == "zend opcache" || ext == "zend-opcache" {
+		return "opcache"
+	}
+	return ext
+}
+
+// Normalize is Name with extensions that ship inside another one's package
+// resolved to that package's extension (dom → xml).
+func Normalize(ext string) string {
+	ext = Name(ext)
 	if alias, ok := aliases[ext]; ok {
 		return alias
 	}

@@ -29,9 +29,16 @@ func Run(h *home.Dir, exe string, withPHP, yes bool, ops Ops, out, errOut io.Wri
 		return err
 	}
 
-	versions, err := h.Versions()
+	installed, err := h.Versions()
 	if err != nil {
 		return fmt.Errorf("list installed versions: %w", err)
+	}
+	// versions installed outside pvm are never uninstalled by it
+	var versions []string
+	for _, v := range installed {
+		if !h.System(v) {
+			versions = append(versions, v)
+		}
 	}
 	// on Windows the PHP builds live in the data directory and go with it
 	phpGoes := withPHP || phpInHome

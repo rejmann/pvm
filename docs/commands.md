@@ -90,10 +90,15 @@ pvm detects the available package manager automatically on Linux.
 
 - **apt / dnf / yum** — the `-cli` package leaves them out, so pvm installs one package per extension right after PHP (`php<X.Y>-xml`; Remi: `php<X.Y>-php-xml`, `php<X.Y>-php-pecl-zip`). It is best effort: if a package is missing, PHP is still installed and a warning says so. The packages pvm installs are listed in `versions/<X.Y>/packages`, and `pvm remove` removes them with PHP.
 - **Homebrew** — `php@X.Y` already includes them.
-- **pacman / zypper** — the packages are left as they are.
+- **zypper** — pvm installs the `php<major>-<ext>` packages (`php8-zip`), recorded like apt's.
+- **pacman** — the packages are left as they are.
 - **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_<ext>.dll` for `openssl`, `zip`, `mbstring` and `curl` (each only if its DLL is in `ext\`; `xml` is compiled in). An existing `php.ini` is never overwritten; later extensions are appended to it.
 
-Any other extension a project needs (`intl`, `gd`, `pdo_pgsql`...) is installed on demand by `pvm composer` — see [below](#pvm-composer-args).
+Any other extension is added with [`pvm ext add`](#pvm-ext), or on demand by `pvm composer` when a project needs it (`intl`, `gd`, `pdo_pgsql`...) — see [below](#pvm-composer-args).
+
+### Administrator rights (Linux)
+
+apt, dnf, yum, pacman, zypper and `update-alternatives` need root. Before the first of them runs, pvm checks whether sudo already has your credentials (`sudo -n true`); if not, it says why it needs them and runs `sudo -v`, which asks for your password once on the terminal — then the whole command (repository, PHP, extensions, `update-alternatives`) goes on without stopping again. A wrong password fails with `sudo authentication failed`; with no terminal to ask on (CI, cron) pvm fails right away and tells you to run it from a terminal or as root. As root (e.g. in a container), commands run directly and sudo is not needed.
 
 ### Windows install directory
 
@@ -171,12 +176,13 @@ pvm list
 pvm managed:
   8.3  (current)
   8.4
+  8.2  (installed outside pvm)
 system:
   8.1  (/usr/bin/php8.1)
 ```
 
 **Groups:**
-- `pvm managed` — versions installed via `pvm install`. The active version is marked `(current)`.
+- `pvm managed` — versions installed via `pvm install`, plus the PHP installed before pvm that it adopted, marked `(installed outside pvm)`. The active version is marked `(current)`.
 - `system` — PHP binaries found outside pvm. Versions already tracked by pvm are excluded.
 
 ---
@@ -204,6 +210,22 @@ Arguments:
 
 > On Windows, `pvm remove` deletes `%LOCALAPPDATA%\pvm\php\<branch>\` entirely.
 
+A version [installed before pvm](#php-installed-before-pvm) is only forgotten: pvm deletes its metadata and Composer but leaves the PHP itself on the system, and does not adopt it again.
+
+```
+PHP 8.3 is no longer managed by pvm; it was installed outside pvm and stays on the system.
+```
+
+---
+
+## PHP installed before pvm
+
+When pvm finds no global version the first time it runs, it looks for the `php` already on `PATH` (outside its shim directory, symlinks resolved — e.g. `/usr/bin/php` → `/usr/bin/php8.3`). If it finds one, it records it as an installed version (`versions/<X.Y>/binary`, marked `versions/<X.Y>/system`) and makes it the global version. So the PHP you already had is `current` and in use by `pvm current`, `which`, `run`, `composer` and the shim, with no `pvm use`, and you can `pvm use` back to it after switching.
+
+- It happens once per pvm home (`<pvm-home>/system-checked`); a global version already chosen is never replaced.
+- If pvm already manages that branch, its own version becomes the global one instead.
+- pvm never uninstalls it: `pvm remove` only forgets it and `pvm self-remove --php` keeps it.
+
 ---
 
 ## Per-project versions (`.php-version`)
@@ -223,7 +245,7 @@ Every `php` call goes through the pvm shim, which picks the first match:
 
 1. `PVM_VERSION` environment variable (e.g. `PVM_VERSION=8.2 php -v`)
 2. The nearest `.php-version`, searching from the current directory up to `/`
-3. The global version set by `pvm use`
+3. The global version set by `pvm use` — or the [PHP installed before pvm](#php-installed-before-pvm), adopted as global
 4. The first `php` on `PATH` outside pvm (system PHP)
 
 A version from steps 1–3 that is not installed is an error; pvm never silently falls back to another version.
@@ -311,9 +333,10 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
 ### What it does
 
 1. Picks the PHP version like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global. Unlike the shim, it never falls back to a system `php` pvm does not manage: with nothing selected it fails with `no PHP version selected — run: pvm use <version>`.
-2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and whether the `zip` extension is loaded.
+2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and which extensions it loads.
 
 3. If `zip` is not loaded and neither `unzip` nor `7z` is on `PATH`, Composer could not extract packages, so pvm says so. In a terminal it asks `Install it now? [y/N]` and, on yes, installs the extension for that version the same way `pvm install` does (apt/dnf/yum package; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` do not need `zip`. Without a terminal (CI, pipes) it only prints the notice.
+   For `install` and `update` (not `require`, whose new packages pvm cannot know yet), pvm also reads the project's platform requirements up front: the `ext-*` entries of `composer.json` (`require`, and `require-dev` unless `--no-dev`) and, for `install`, of the packages in `composer.lock`. Extensions `config.platform` pretends are present are skipped, and so is the whole check with `--ignore-platform-req(s)` or `-d`/`--working-dir`; `$COMPOSER` names the file as it does for Composer. Missing ones are offered the same way, in a terminal only, so Composer does not have to fail first. An extension declined here is not offered again after the run.
 4. If this PHP version has no `composer.phar` yet:
    - reads [getcomposer.org/versions](https://getcomposer.org/versions) and picks the newest stable release whose minimum PHP the exact version meets — the same rule `composer self-update` follows. Today that is 2.10.x for PHP 7.2.5+ and the 2.2 LTS for PHP 5.3–7.2.4; when Composer raises its minimum, pvm follows without an update;
    - downloads `getcomposer.org/download/<version>/composer.phar` and verifies its RSA-SHA384 signature (`.sig`) with Composer's release key, embedded in pvm — a corrupted or tampered file is rejected and nothing is saved;
@@ -351,6 +374,46 @@ Composer resolves dependencies against the PHP that runs it, so `pvm composer re
 
 ---
 
+## `pvm ext`
+
+Manages the PHP extensions of an installed version. It works on the version in use in the current directory (`PVM_VERSION` → nearest `.php-version` → global), or the one given with `-v/--version`.
+
+```
+pvm ext list    [-v version]              # alias ls: extensions PHP loads
+pvm ext add     [-v version] <ext>...     # install
+pvm ext remove  [-v version] <ext>...     # alias rm: uninstall what pvm installed
+pvm ext disable [-v version] <ext>...     # turn off without uninstalling
+pvm ext enable  [-v version] <ext>...     # turn back on
+```
+
+### Examples
+
+```sh
+pvm ext add redis intl
+pvm ext add -v 8.2 xdebug
+pvm ext disable xdebug      # e.g. while running the test suite faster
+pvm ext enable xdebug
+pvm ext rm redis
+pvm ext ls
+```
+
+Names are accepted as PHP or Composer spell them (`intl`, `ext-intl`, `Zend OPcache`); `add` skips the ones already loaded.
+
+### How each OS does it
+
+| OS | `add` / `remove` | `enable` / `disable` |
+|----|------------------|----------------------|
+| Linux (apt) | `php<X.Y>-<ext>` package (`ext-dom` → `xml`, `pdo_mysql` → `mysql`) | `phpenmod` / `phpdismod -v <X.Y>` |
+| Linux (dnf / yum, Remi) | `php<X.Y>-php-<ext>` (`pecl-` prefix for PECL ones) | Renames the file in `php.d` that loads it to `*.ini.disabled` |
+| Linux (zypper) | `php<major>-<ext>` | Same, in `conf.d` |
+| Linux (pacman) | Not supported | Same, in `conf.d` |
+| macOS | `brew install shivammathur/extensions/<ext>@<X.Y>` ([tap](https://github.com/shivammathur/homebrew-extensions), for PECL extensions — `php@X.Y` bundles the core ones) | Same, in Homebrew's `conf.d` |
+| Windows | `extension=` line in the version's `php.ini`, for the DLLs in `ext\` (the builds bundle no PECL extensions); `remove` deletes the line | Comments the line out, or back in |
+
+Packages and formulas pvm installs are recorded in `versions/<X.Y>/packages`, so `pvm remove` uninstalls them with the version. `pvm ext remove` only removes what pvm installed (those, plus the base extensions of `pvm install`); anything else fails with `pvm did not install <ext>`. On Linux, root is needed as described in [Administrator rights](#administrator-rights-linux).
+
+A version installed outside pvm (see [PHP installed before pvm](#php-installed-before-pvm)) can be listed, but `add`, `remove`, `enable` and `disable` refuse to change it — its extensions belong to the tool that installed it. `pvm composer` does the same instead of offering to install them.
+
 ## `pvm current` · alias `cur`
 
 Shows the PHP version active in the current directory and, when it is not the global one, where it was set.
@@ -363,6 +426,7 @@ pvm current
 
 ```
 Current PHP version: 8.3
+Current PHP version: 8.3 (installed outside pvm)
 Current PHP version: 7.4 (set by /home/me/code/legacy-app/.php-version)
 ```
 
@@ -374,7 +438,7 @@ No PHP version is currently active.
 
 ### What it does
 
-Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.
+Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active. A PHP installed before pvm is already the global version, without `pvm use` — see [PHP installed before pvm](#php-installed-before-pvm).
 
 ---
 
@@ -434,7 +498,7 @@ pvm self-remove --yes    # no prompt, e.g. in scripts
 ### What it does
 
 1. Lists the pvm binary, the data directory (`~/.pvm`, `%LOCALAPPDATA%\pvm` or `$PVM_HOME`) and the installed PHP versions, then asks for confirmation.
-2. With `--php`, removes each installed PHP version like `pvm remove` does. On Windows the PHP builds live in the data directory, so they are removed even without `--php`; on Linux and macOS they are system/Homebrew packages and are kept otherwise.
+2. With `--php`, removes each installed PHP version like `pvm remove` does, except the ones [installed before pvm](#php-installed-before-pvm), which stay on the system. On Windows the PHP builds live in the data directory, so they are removed even without `--php`; on Linux and macOS they are system/Homebrew packages and are kept otherwise.
 3. On Windows, removes the shim directory and the pvm binary directory from the user `PATH`, and the `# pvm-wrapper` block from the PowerShell profile. Failures here are reported as warnings.
 4. Deletes the data directory.
 5. Deletes the pvm binary. On Windows a running `.exe` cannot be deleted, so it is renamed and a background `cmd.exe` deletes it — and its directory, if left empty — right after pvm exits.

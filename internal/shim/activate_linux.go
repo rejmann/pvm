@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/sudo"
 )
 
 // Activator switches the global version with the shim and update-alternatives.
@@ -23,7 +23,10 @@ func New(stdout, stderr io.Writer) *Activator {
 
 // Activate makes ver, whose php binary is bin, the global version.
 func (a *Activator) Activate(h *home.Dir, ver, bin string) error {
-	cmd := exec.Command("sudo", "update-alternatives", "--set", "php", bin)
+	if err := sudo.Authenticate(a.Stderr, "switch the system php with update-alternatives"); err != nil {
+		return err
+	}
+	cmd := sudo.Command("update-alternatives", "--set", "php", bin)
 	cmd.Stdout, cmd.Stderr = a.Stdout, a.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("update-alternatives --set php %s: %w", bin, err)
@@ -45,7 +48,7 @@ func (a *Activator) Activate(h *home.Dir, ver, bin string) error {
 
 // Deactivate leaves no global version and lets update-alternatives pick php.
 func (a *Activator) Deactivate(h *home.Dir) error {
-	cmd := exec.Command("sudo", "update-alternatives", "--auto", "php")
+	cmd := sudo.Command("update-alternatives", "--auto", "php")
 	cmd.Stdout, cmd.Stderr = a.Stdout, a.Stderr
 	if err := cmd.Run(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("update-alternatives --auto php: %w", err)

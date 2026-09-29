@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/sysphp"
 )
 
 func TestPrintCurrent(t *testing.T) {
@@ -75,5 +76,23 @@ func writePHPVersion(t *testing.T, dir, v string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, ".php-version"), []byte(v+"\n"), 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPrintCurrentSystem(t *testing.T) {
+	h := newHome(t)
+	bin := filepath.Join(t.TempDir(), "php8.3")
+	if err := os.WriteFile(bin, nil, 0755); err != nil {
+		t.Fatal(err)
+	}
+	m := testManager(t, h)
+	m.SystemPHP = func() (sysphp.PHP, bool) { return sysphp.PHP{Version: "8.3", Binary: bin}, true }
+	var out bytes.Buffer
+
+	if err := printCurrent(m, t.TempDir(), "", &out); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "Current PHP version: 8.3 (installed outside pvm)\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
 	}
 }

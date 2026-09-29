@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -43,9 +45,13 @@ func (s *System) Install(h *home.Dir, ver string) error {
 	return h.SetBinary(ver, binPath)
 }
 
-// Remove runs brew uninstall php@X.Y.
+// Remove runs brew uninstall php@X.Y, after the extension formulas pvm
+// installed for it.
 func (s *System) Remove(h *home.Dir, ver string) error {
 	branch := version.Branch(ver)
+	for _, formula := range h.Packages(ver) {
+		exec.Command("brew", "uninstall", formula).Run()
+	}
 	cmd := exec.Command("brew", "uninstall", "php@"+branch)
 	cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 	if err := cmd.Run(); err != nil {
@@ -54,10 +60,82 @@ func (s *System) Remove(h *home.Dir, ver string) error {
 	return nil
 }
 
-// AddExtensions is not supported: Homebrew's php@X.Y bundles the common
-// extensions, and PECL ones are not managed yet.
-func (s *System) AddExtensions(_ *home.Dir, _ string, exts []string) error {
-	return fmt.Errorf("pvm cannot install PHP extensions with Homebrew yet (%s)", strings.Join(exts, ", "))
+// extTap has a formula per extension and PHP branch (redis@8.3), built for
+// the php@X.Y of homebrew-core. Homebrew taps it on the first install.
+const extTap = "shivammathur/extensions/"
+
+// AddExtensions installs the formulas of exts for installed version ver and
+// records them, so Remove uninstalls them with the version. Homebrew's
+// php@X.Y already bundles the core extensions (intl, zip...); the tap adds
+// the PECL ones (redis, xdebug, imagick...).
+func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
+	branch := version.Branch(ver)
+
+	var installed, failed []string
+	for _, ext := range exts {
+		formula := extTap + phpext.Name(ext) + "@" + branch
+		if slices.Contains(installed, formula) || slices.Contains(failed, formula) {
+			continue
+		}
+		cmd := exec.Command("brew", "install", formula)
+		cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
+		if err := cmd.Run(); err != nil {
+			failed = append(failed, formula)
+			continue
+		}
+		installed = append(installed, formula)
+	}
+
+	if err := h.AddPackages(ver, installed); err != nil {
+		return fmt.Errorf("record installed extensions: %w", err)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("could not install %s with Homebrew", strings.Join(failed, ", "))
+	}
+	return nil
+}
+
+// RemoveExtensions uninstalls the formulas pvm installed for exts.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
+	branch := version.Branch(ver)
+	owned := h.Packages(ver)
+
+	var formulas, foreign []string
+	for _, ext := range exts {
+		formula := extTap + phpext.Name(ext) + "@" + branch
+		switch {
+		case slices.Contains(formulas, formula):
+		case slices.Contains(owned, formula):
+			formulas = append(formulas, formula)
+		default:
+			foreign = append(foreign, ext)
+		}
+	}
+	if len(foreign) > 0 {
+		return fmt.Errorf("pvm did not install %s for PHP %s, so it does not remove it", strings.Join(foreign, ", "), ver)
+	}
+
+	for _, formula := range formulas {
+		cmd := exec.Command("brew", "uninstall", formula)
+		cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("brew uninstall %s: %w", formula, err)
+		}
+		if err := h.RemovePackages(ver, []string{formula}); err != nil {
+			return fmt.Errorf("record removed extensions: %w", err)
+		}
+	}
+	return nil
+}
+
+// SetExtensionsEnabled turns exts on or off by renaming their file in the
+// conf.d directory of Homebrew's php@X.Y.
+func (s *System) SetExtensionsEnabled(h *home.Dir, ver string, exts []string, enabled bool) error {
+	bin, err := h.Binary(ver)
+	if err != nil {
+		return err
+	}
+	return setConfdEnabled(bin, exts, enabled, s.Stderr)
 }
 
 func brewBinaryPath(branch string) (string, error) {

@@ -38,9 +38,12 @@ func printCurrent(m *pvm.Manager, dir, env string, out io.Writer) error {
 		return err
 	}
 
-	if a.Global() {
+	switch {
+	case a.Global() && a.System:
+		fmt.Fprintf(out, "Current PHP version: %s (installed outside pvm)\n", a.Version)
+	case a.Global():
 		fmt.Fprintf(out, "Current PHP version: %s\n", a.Version)
-	} else {
+	default:
 		fmt.Fprintf(out, "Current PHP version: %s (set by %s)\n", a.Version, a.Source)
 	}
 	return nil

@@ -6,7 +6,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/phpext"
 )
 
 // iniExtensions are the extensions pvm enables in the php.ini it writes for
@@ -53,10 +56,31 @@ func pvmIniBlock(installDir string) string {
 	return strings.Join(lines, "\n")
 }
 
+// iniExtension parses a php.ini line that loads an extension
+// (extension=php_zip.dll, zend_extension=opcache, ;extension=curl...) into
+// the extension's name and whether the line is commented out.
+func iniExtension(line string) (name string, commented, ok bool) {
+	line = strings.TrimSpace(line)
+	line, commented = strings.CutPrefix(line, ";")
+	key, value, found := strings.Cut(strings.TrimSpace(line), "=")
+	key = strings.TrimSpace(key)
+	if !found || (key != "extension" && key != "zend_extension") {
+		return "", false, false
+	}
+	value = strings.Trim(strings.TrimSpace(value), `"`)
+	if value == "" || strings.ContainsAny(value, " ;") {
+		return "", false, false
+	}
+	value = filepath.Base(strings.ReplaceAll(value, `\`, "/"))
+	value = strings.TrimSuffix(strings.TrimSuffix(strings.TrimPrefix(value, "php_"), ".dll"), ".so")
+	return strings.ToLower(value), commented, true
+}
+
 // enableIniExtensions enables exts in installDir\php.ini (written first when
-// missing): each one whose DLL ships in ext\ and is not enabled yet gets an
-// extension= line. Extensions without a DLL are reported, since Windows
-// builds compile many in (dom, xml...) and PECL ones are not bundled.
+// missing): each one whose DLL ships in ext\ and is not enabled yet gets its
+// commented-out line (e.g. the template's ;extension=curl) uncommented, or an
+// extension= line appended. Extensions without a DLL are reported, since
+// Windows builds compile many in (dom, xml...) and PECL ones are not bundled.
 func enableIniExtensions(installDir string, exts []string) error {
 	if err := writePHPIni(installDir); err != nil {
 		return err
@@ -66,19 +90,24 @@ func enableIniExtensions(installDir string, exts []string) error {
 	if err != nil {
 		return err
 	}
+	lines := strings.Split(string(data), "\n")
 	enabled := map[string]bool{}
-	for _, line := range strings.Split(string(data), "\n") {
-		name, ok := strings.CutPrefix(strings.TrimSpace(line), "extension=")
-		if !ok {
-			continue
+	disabledAt := map[string]int{}
+	for i, line := range lines {
+		name, commented, ok := iniExtension(line)
+		switch {
+		case !ok:
+		case !commented:
+			enabled[name] = true
+		case disabledAt[name] == 0:
+			disabledAt[name] = i + 1
 		}
-		name = strings.TrimSuffix(strings.TrimPrefix(strings.Trim(name, `"`), "php_"), ".dll")
-		enabled[strings.ToLower(name)] = true
 	}
 
 	var add, missing []string
+	changed := false
 	for _, ext := range exts {
-		ext = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), "ext-")
+		ext = phpext.Name(ext)
 		if enabled[ext] {
 			continue
 		}
@@ -87,24 +116,71 @@ func enableIniExtensions(installDir string, exts []string) error {
 			continue
 		}
 		enabled[ext] = true
+		if at := disabledAt[ext]; at > 0 {
+			line := lines[at-1]
+			lines[at-1] = strings.Replace(line, ";", "", 1)
+			changed = true
+			continue
+		}
 		add = append(add, "extension=php_"+ext+".dll")
 	}
 
-	if len(add) > 0 {
-		f, err := os.OpenFile(iniPath, os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
+	if changed || len(add) > 0 {
+		out := strings.Join(lines, "\n")
+		if len(add) > 0 {
+			out = strings.TrimRight(out, "\r\n") + "\n\n" + strings.Join(add, "\n") + "\n"
 		}
-		_, err = f.WriteString("\n" + strings.Join(add, "\n") + "\n")
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
+		if err := os.WriteFile(iniPath, []byte(out), 0644); err != nil {
 			return err
 		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("no DLL for %s in %s", strings.Join(missing, ", "), filepath.Join(installDir, "ext"))
+	}
+	return nil
+}
+
+// disableIniExtensions stops installDir\php.ini from loading exts: their
+// lines are commented out, or deleted when drop is set. An extension php.ini
+// does not load is reported.
+func disableIniExtensions(installDir string, exts []string, drop bool) error {
+	iniPath := filepath.Join(installDir, "php.ini")
+	data, err := os.ReadFile(iniPath)
+	if err != nil {
+		return err
+	}
+
+	want := map[string]bool{}
+	for _, ext := range exts {
+		want[phpext.Name(ext)] = true
+	}
+	found := map[string]bool{}
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		name, commented, ok := iniExtension(line)
+		if !ok || commented || !want[name] {
+			out = append(out, line)
+			continue
+		}
+		found[name] = true
+		if !drop {
+			out = append(out, ";"+strings.TrimLeft(line, " \t"))
+		}
+	}
+
+	var missing []string
+	for _, ext := range exts {
+		if name := phpext.Name(ext); !found[name] && !slices.Contains(missing, name) {
+			missing = append(missing, name)
+		}
+	}
+	if len(found) > 0 {
+		if err := os.WriteFile(iniPath, []byte(strings.Join(out, "\n")), 0644); err != nil {
+			return err
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%s not enabled in %s", strings.Join(missing, ", "), iniPath)
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 // Use makes the installed version t the global one.
 func (m *Manager) Use(t Target) error {
+	m.adoptSystem()
 	if !m.Home.Installed(t.Version) {
 		return fmt.Errorf("%s not installed — run: pvm install %s", t, t.Arg)
 	}

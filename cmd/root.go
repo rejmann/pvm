@@ -25,6 +25,7 @@ func NewRootCmd(version string) *cobra.Command {
 		newWhichCmd(),
 		newRunCmd(),
 		newComposerCmd(),
+		newExtCmd(),
 		newShimCmd(),
 		newSelfUpgradeCmd(version),
 		newSelfRemoveCmd(),

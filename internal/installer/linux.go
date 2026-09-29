@@ -7,10 +7,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/phpext"
+	"github.com/rejmann/pvm/internal/sudo"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -54,7 +56,7 @@ var packageManagers = []pkgManagerDef{
 				return nil
 			}
 			fmt.Fprintln(stdout, "Package not found, adding ondrej/php PPA...")
-			add := exec.Command("sudo", "add-apt-repository", "-y", "ppa:ondrej/php")
+			add := sudo.Command("add-apt-repository", "-y", "ppa:ondrej/php")
 			add.Stdout, add.Stderr = stdout, stderr
 			// add-apt-repository already runs apt-get update; a second update
 			// right after it can fail on the apt lists lock.
@@ -80,11 +82,7 @@ var packageManagers = []pkgManagerDef{
 			if isInstallable(pkg, pmDnf, "info", pkg) {
 				return nil
 			}
-			fmt.Fprintln(stdout, "Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", pmDnf, "install", "-y",
-				"https://rpms.remirepo.net/fedora/remi-release-$(rpm -E %fedora).rpm")
-			remi.Stdout, remi.Stderr = stdout, stderr
-			return remi.Run()
+			return addRemi(pmDnf, "fedora", "%fedora", stdout, stderr)
 		},
 	},
 	{
@@ -103,11 +101,7 @@ var packageManagers = []pkgManagerDef{
 			if isInstallable(pkg, pmYum, "info", pkg) {
 				return nil
 			}
-			fmt.Fprintln(stdout, "Package not found, adding Remi repository...")
-			remi := exec.Command("sudo", pmYum, "install", "-y",
-				"https://rpms.remirepo.net/enterprise/remi-release-$(rpm -E %rhel).rpm")
-			remi.Stdout, remi.Stderr = stdout, stderr
-			return remi.Run()
+			return addRemi(pmYum, "enterprise", "%rhel", stdout, stderr)
 		},
 	},
 	{
@@ -125,6 +119,11 @@ var packageManagers = []pkgManagerDef{
 	{
 		bin:    pmZypper,
 		phpPkg: func(branch string) string { return "php" + branch },
+		// openSUSE names extension packages by major version only (php8-intl).
+		extPkg: func(branch, ext string) string {
+			major, _, _ := strings.Cut(branch, ".")
+			return "php" + major + "-" + ext
+		},
 		phpBin: func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmZypper, "install", "-y", pkg}
@@ -134,6 +133,21 @@ var packageManagers = []pkgManagerDef{
 		},
 		preInstall: nil,
 	},
+}
+
+// addRemi installs the Remi release package with pm; macro (%fedora or
+// %rhel) is expanded by rpm, since no shell runs the command.
+func addRemi(pm, dist, macro string, stdout, stderr io.Writer) error {
+	fmt.Fprintln(stdout, "Package not found, adding Remi repository...")
+	out, err := exec.Command("rpm", "-E", macro).Output()
+	if err != nil {
+		return fmt.Errorf("rpm -E %s: %w", macro, err)
+	}
+	release := strings.TrimSpace(string(out))
+	remi := sudo.Command(pm, "install", "-y",
+		"https://rpms.remirepo.net/"+dist+"/remi-release-"+release+".rpm")
+	remi.Stdout, remi.Stderr = stdout, stderr
+	return remi.Run()
 }
 
 // System installs PHP with the distribution's package manager (apt, dnf,
@@ -164,7 +178,7 @@ func isInstallable(pkg string, args ...string) bool {
 
 // sudo runs args as root with the package manager's output shown.
 func (s *System) sudo(args []string) error {
-	cmd := exec.Command("sudo", args...)
+	cmd := sudo.Command(args...)
 	cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 	return cmd.Run()
 }
@@ -174,6 +188,10 @@ func (s *System) Install(h *home.Dir, ver string) error {
 	pm := detectPackageManager()
 	if pm == nil {
 		return errNoPackageManager
+	}
+
+	if err := sudo.Authenticate(s.Stderr, "install PHP "+ver+" with "+pm.bin); err != nil {
+		return err
 	}
 
 	branch := version.Branch(ver)
@@ -206,6 +224,9 @@ func (s *System) Remove(h *home.Dir, ver string) error {
 	if pm == nil {
 		return errNoPackageManager
 	}
+	if err := sudo.Authenticate(s.Stderr, "remove PHP "+ver+" with "+pm.bin); err != nil {
+		return err
+	}
 	branch := version.Branch(ver)
 
 	// Extensions first, and quietly: some may never have been installed. The
@@ -218,7 +239,7 @@ func (s *System) Remove(h *home.Dir, ver string) error {
 		}
 	}
 	for _, extra := range extras {
-		exec.Command("sudo", pm.removeArgs(extra)...).Run()
+		sudo.Command(pm.removeArgs(extra)...).Run()
 	}
 
 	if err := s.sudo(pm.removeArgs(pm.phpPkg(branch))); err != nil {
@@ -233,7 +254,103 @@ func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 	if pm == nil {
 		return errNoPackageManager
 	}
+	if pm.extPkg == nil {
+		return fmt.Errorf("pvm cannot install PHP extensions with %s", pm.bin)
+	}
+	if err := sudo.Authenticate(s.Stderr, "install PHP extensions with "+pm.bin); err != nil {
+		return err
+	}
 	return s.installExtensions(pm, h, ver, exts)
+}
+
+// RemoveExtensions uninstalls the packages of exts for installed version ver.
+// Only packages pvm installed are removed: the recorded ones and the base
+// extensions, which pvm install adds.
+func (s *System) RemoveExtensions(h *home.Dir, ver string, exts []string) error {
+	pm := detectPackageManager()
+	if pm == nil {
+		return errNoPackageManager
+	}
+	if pm.extPkg == nil {
+		return fmt.Errorf("pvm cannot remove PHP extensions with %s", pm.bin)
+	}
+	branch := version.Branch(ver)
+
+	owned := map[string]bool{}
+	for _, pkg := range h.Packages(ver) {
+		owned[pkg] = true
+	}
+	for _, ext := range phpext.Base {
+		owned[pm.extPkg(branch, ext)] = true
+	}
+
+	var pkgs, foreign []string
+	for _, ext := range exts {
+		pkg := pm.extPkg(branch, phpext.Normalize(ext))
+		switch {
+		case slices.Contains(pkgs, pkg):
+		case owned[pkg]:
+			pkgs = append(pkgs, pkg)
+		default:
+			foreign = append(foreign, ext)
+		}
+	}
+	if len(foreign) > 0 {
+		return fmt.Errorf("pvm did not install %s for PHP %s, so it does not remove it", strings.Join(foreign, ", "), ver)
+	}
+
+	if err := sudo.Authenticate(s.Stderr, "remove PHP extensions with "+pm.bin); err != nil {
+		return err
+	}
+	var removed, failed []string
+	for _, pkg := range pkgs {
+		if err := s.sudo(pm.removeArgs(pkg)); err != nil {
+			failed = append(failed, pkg)
+			continue
+		}
+		removed = append(removed, pkg)
+	}
+	if err := h.RemovePackages(ver, removed); err != nil {
+		return fmt.Errorf("record removed extensions: %w", err)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("could not remove %s via %s", strings.Join(failed, ", "), pm.bin)
+	}
+	return nil
+}
+
+// SetExtensionsEnabled turns exts on or off for installed version ver
+// without uninstalling them: with phpenmod/phpdismod on Debian and Ubuntu,
+// elsewhere by renaming the .ini file that loads each one.
+func (s *System) SetExtensionsEnabled(h *home.Dir, ver string, exts []string, enabled bool) error {
+	pm := detectPackageManager()
+	if pm == nil || pm.bin != pmApt {
+		bin, err := h.Binary(ver)
+		if err != nil {
+			return err
+		}
+		return setConfdEnabled(bin, exts, enabled, s.Stderr)
+	}
+
+	branch := version.Branch(ver)
+	var missing []string
+	for _, ext := range exts {
+		if _, err := os.Stat("/etc/php/" + branch + "/mods-available/" + ext + ".ini"); err != nil {
+			missing = append(missing, ext)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%s not installed for PHP %s", strings.Join(missing, ", "), ver)
+	}
+
+	tool := "phpdismod"
+	if enabled {
+		tool = "phpenmod"
+	}
+	if err := sudo.Authenticate(s.Stderr, "run "+tool); err != nil {
+		return err
+	}
+	return s.sudo(append([]string{tool, "-v", branch}, exts...))
 }
 
 // remiExtPkg names Remi's package for ext; PECL extensions carry a pecl- prefix.

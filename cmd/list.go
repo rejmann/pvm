@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
@@ -31,8 +32,15 @@ func listVersions(m *pvm.Manager, out io.Writer) error {
 	if len(l.Managed) > 0 {
 		fmt.Fprintln(out, "pvm managed:")
 		for _, v := range l.Managed {
+			var tags []string
 			if v == l.Current {
-				fmt.Fprintf(out, "  %s (current)\n", v)
+				tags = append(tags, "current")
+			}
+			if m.Home.System(v) {
+				tags = append(tags, "installed outside pvm")
+			}
+			if len(tags) > 0 {
+				fmt.Fprintf(out, "  %s (%s)\n", v, strings.Join(tags, ", "))
 			} else {
 				fmt.Fprintf(out, "  %s\n", v)
 			}
