@@ -70,7 +70,7 @@ func (a *Activator) Activate(h *home.Dir, version, binaryPath string) error {
 // session automatically. A block left by an older pvm is replaced.
 // Best-effort — silently ignored on failure.
 func installPowerShellWrapper(shimDir string) {
-	pvmExe, err := os.Executable()
+	pvmExe, err := wrapperExe()
 	if err != nil {
 		return
 	}
@@ -88,6 +88,19 @@ func installPowerShellWrapper(shimDir string) {
 
 	_ = os.MkdirAll(filepath.Dir(profilePath), 0755)
 	_ = os.WriteFile(profilePath, []byte(updated), 0644)
+}
+
+// wrapperExe returns the pvm.exe the wrapper should call: the running binary,
+// or the installed one on PATH when running from `go run`.
+func wrapperExe() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if !isGoBuildBinary(exe) {
+		return exe, nil
+	}
+	return exec.LookPath("pvm.exe")
 }
 
 // RemoveIntegration undoes what pvm set up outside its data directory: the
