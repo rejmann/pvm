@@ -27,12 +27,12 @@ func Remove(base, ver string) error {
 	}
 }
 
-// EnsureExtensions writes the php.ini that enables openssl and zip for an
-// already installed version (e.g. one installed before pvm wrote php.ini).
-func EnsureExtensions(base, ver string) error {
+// EnsureExtensions enables the PHP extensions exts (e.g. "zip", "ext-xml")
+// for an installed version, in the php.ini pvm manages.
+func EnsureExtensions(base, ver string, exts []string) error {
 	switch runtime.GOOS {
 	case system.Windows:
-		return WindowsEnsureExtensions(base, ver)
+		return WindowsEnsureExtensions(base, ver, exts)
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}

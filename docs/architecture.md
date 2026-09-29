@@ -50,7 +50,8 @@ pvm/
     │   ├── brew.go              # macOS: Homebrew
     │   ├── windows.go           # Windows: download from windows.php.net
     │   ├── windows_download.go  # HTTP download + zip extraction helpers
-    │   ├── phpini.go            # writePHPIni(): php.ini with openssl + zip for Windows builds
+    │   ├── phpini.go            # writePHPIni() / enableIniExtensions(): php.ini for Windows builds
+    │   ├── extensions.go        # BaseExtensions, ext-* aliases, versions/<ver>/packages record
     │   └── util.go              # majorMinor() version helper
     ├── symlink/
     │   ├── get.go               # GetCurrent() — reads current-version file

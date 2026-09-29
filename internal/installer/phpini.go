@@ -10,10 +10,10 @@ import (
 )
 
 // iniExtensions are the extensions pvm enables in the php.ini it writes for
-// the Windows builds: openssl so Composer can use HTTPS, zip so it can extract
-// packages without 7z. Each one is enabled only when its DLL ships in ext\
+// the Windows builds: openssl so Composer can use HTTPS, then BaseExtensions
+// (xml is compiled in). Each one is enabled only when its DLL ships in ext\
 // (older builds compile zip in statically).
-var iniExtensions = []string{"openssl", "zip"}
+var iniExtensions = []string{"openssl", "zip", "mbstring", "curl"}
 
 const iniMarker = "; --- Added by pvm ---"
 
@@ -51,4 +51,60 @@ func pvmIniBlock(installDir string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// enableIniExtensions enables exts in installDir\php.ini (written first when
+// missing): each one whose DLL ships in ext\ and is not enabled yet gets an
+// extension= line. Extensions without a DLL are reported, since Windows
+// builds compile many in (dom, xml...) and PECL ones are not bundled.
+func enableIniExtensions(installDir string, exts []string) error {
+	if err := writePHPIni(installDir); err != nil {
+		return err
+	}
+	iniPath := filepath.Join(installDir, "php.ini")
+	data, err := os.ReadFile(iniPath)
+	if err != nil {
+		return err
+	}
+	enabled := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		name, ok := strings.CutPrefix(strings.TrimSpace(line), "extension=")
+		if !ok {
+			continue
+		}
+		name = strings.TrimSuffix(strings.TrimPrefix(strings.Trim(name, `"`), "php_"), ".dll")
+		enabled[strings.ToLower(name)] = true
+	}
+
+	var add, missing []string
+	for _, ext := range exts {
+		ext = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), "ext-")
+		if enabled[ext] {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(installDir, "ext", "php_"+ext+".dll")); err != nil {
+			missing = append(missing, ext)
+			continue
+		}
+		enabled[ext] = true
+		add = append(add, "extension=php_"+ext+".dll")
+	}
+
+	if len(add) > 0 {
+		f, err := os.OpenFile(iniPath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString("\n" + strings.Join(add, "\n") + "\n")
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("no DLL for %s in %s", strings.Join(missing, ", "), filepath.Join(installDir, "ext"))
+	}
+	return nil
 }

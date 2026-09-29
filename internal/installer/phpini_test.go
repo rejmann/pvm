@@ -72,3 +72,24 @@ func TestWritePHPIniWithoutTemplate(t *testing.T) {
 		t.Errorf("php.ini = %q", data)
 	}
 }
+
+func TestEnableIniExtensions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "php.ini"), "extension=zip\n;extension=intl\n")
+	for _, dll := range []string{"php_zip.dll", "php_intl.dll", "php_mbstring.dll"} {
+		writeFile(t, filepath.Join(dir, "ext", dll), "")
+	}
+
+	err := enableIniExtensions(dir, []string{"ext-intl", "zip", "mbstring", "intl", "redis"})
+	if err == nil || !strings.Contains(err.Error(), "no DLL for redis") {
+		t.Errorf("error = %v, want redis reported", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "php.ini"))
+	ini := string(data)
+	if strings.Count(ini, "extension=php_intl.dll") != 1 || !strings.Contains(ini, "extension=php_mbstring.dll") {
+		t.Errorf("php.ini = %q", ini)
+	}
+	if strings.Contains(ini, "php_zip.dll") {
+		t.Errorf("zip was already enabled, php.ini = %q", ini)
+	}
+}

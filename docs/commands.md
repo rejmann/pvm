@@ -76,9 +76,9 @@ pvm detects the available package manager automatically on Linux.
 
 | OS / Distro | Backend | Notes |
 |-------------|---------|-------|
-| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + `php<X.Y>-zip` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
-| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
-| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + `php<X.Y>-php-pecl-zip` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + base extensions | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
+| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + base extensions | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + base extensions | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
 | Linux (Arch) | `pacman -S php` | Only the version in the official repos; no extra repo added |
 | Linux (openSUSE) | `zypper install php<X.Y>` | — |
 | macOS | `brew install php@<X.Y>` | Requires [Homebrew](https://brew.sh) |
@@ -86,14 +86,14 @@ pvm detects the available package manager automatically on Linux.
 
 ### Extensions for Composer
 
-`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) needs — `openssl` for HTTPS and `zip` to extract packages — so nothing else (such as `unzip` or `7z`) has to be installed on the machine:
+`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) and most projects need — the **base extensions** `zip` (extract packages without `unzip`/`7z`), `xml`, `mbstring` and `curl`, plus `openssl` for HTTPS:
 
-- **apt / dnf / yum** — the `-cli` package leaves `zip` out, so pvm installs the zip extension package right after PHP. It is best effort: if the package is missing, PHP is still installed and a warning says Composer will need `unzip` or `7z`. `pvm remove` removes it too.
-- **Homebrew** — `php@X.Y` already includes `openssl` and `zip`.
+- **apt / dnf / yum** — the `-cli` package leaves them out, so pvm installs one package per extension right after PHP (`php<X.Y>-xml`; Remi: `php<X.Y>-php-xml`, `php<X.Y>-php-pecl-zip`). It is best effort: if a package is missing, PHP is still installed and a warning says so. The packages pvm installs are listed in `versions/<X.Y>/packages`, and `pvm remove` removes them with PHP.
+- **Homebrew** — `php@X.Y` already includes them.
 - **pacman / zypper** — the packages are left as they are.
-- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_openssl.dll` / `php_zip.dll` (each only if its DLL is in `ext\`). An existing `php.ini` is never overwritten.
+- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_<ext>.dll` for `openssl`, `zip`, `mbstring` and `curl` (each only if its DLL is in `ext\`; `xml` is compiled in). An existing `php.ini` is never overwritten; later extensions are appended to it.
 
-For a version that lacks `zip` anyway (installed before pvm did this, or the package failed), `pvm composer` offers to add it — see [below](#pvm-composer-args).
+Any other extension a project needs (`intl`, `gd`, `pdo_pgsql`...) is installed on demand by `pvm composer` — see [below](#pvm-composer-args).
 
 ### Windows install directory
 
@@ -323,7 +323,8 @@ PVM_VERSION=8.2 pvm composer update   # a different installed version for one ca
 5. Sets, for the Composer process only:
    - `PVM_VERSION=<version>`, so scripts Composer runs that call `php` use the same version;
    - `COMPOSER_HOME=<pvm-home>/composer/php/<version>/home` and `COMPOSER_CACHE_DIR=<pvm-home>/composer/cache`, instead of `~/.config/composer` and `~/.cache/composer`. If you already set either variable, yours is kept.
-6. Replaces itself with `php composer.phar args...` (Windows: runs it as a child), so stdin, stdout, signals and the exit code are Composer's.
+6. Runs `php composer.phar args...` as a child process: stdin, stdout and the exit code are Composer's, Ctrl+C reaches Composer directly and other termination signals are forwarded. Composer's stderr is shown as usual and also read by pvm (in a terminal pvm adds `--ansi`, since Composer would otherwise turn colors off for a piped stderr; `--no-ansi` or `NO_COLOR` turn that off).
+7. If Composer reports extensions missing from the system (`requires ext-xml * -> it is missing from your system`), pvm names them and, in a terminal, asks `Install now? [y/N]`. On yes it installs them for that version (apt/dnf/yum package, recorded in `versions/<X.Y>/packages`; Windows: `extension=` line in `php.ini`; aliases such as `ext-dom` → `xml` or `ext-pdo_mysql` → `mysql` are resolved) and runs the same command again. This does not depend on Composer's exit code: after `create-project`, Symfony Flex reports a failed update and still exits 0. For `create-project`, the directory Composer reported (`Created project in ...`) is emptied first — Composer only creates projects in a new or empty directory, so this restores the starting point and the project's scripts and recipes run again. Without a terminal (CI, pipes) pvm only prints the notice.
 
 ### One Composer per PHP version
 
