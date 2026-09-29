@@ -5,25 +5,40 @@ package installer
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/rejmann/pvm/internal/php"
+	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/phpnet"
+	"github.com/rejmann/pvm/internal/version"
 )
 
-func WindowsInstall(base, ver string) error {
-	branch := majorMinor(ver)
+// System installs the PHP builds from windows.php.net into the pvm home.
+type System struct {
+	Stdout, Stderr io.Writer // progress messages
+}
+
+// New returns the installer for this system.
+func New(stdout, stderr io.Writer) *System {
+	return &System{Stdout: stdout, Stderr: stderr}
+}
+
+// Install downloads and extracts PHP ver, writes its php.ini and records
+// its binary.
+func (s *System) Install(h *home.Dir, ver string) error {
+	branch := version.Branch(ver)
 
 	fullVer, err := resolveFullVersion(ver, branch)
 	if err != nil {
 		return fmt.Errorf("resolve PHP %s: %w", ver, err)
 	}
 
-	installDir := phpInstallDir(base, branch)
-	fmt.Printf("Downloading PHP %s to %s...\n", fullVer, installDir)
+	installDir := h.PHPDir(branch)
+	fmt.Fprintf(s.Stdout, "Downloading PHP %s to %s...\n", fullVer, installDir)
 
-	if err := downloadAndExtractPHP(fullVer, installDir); err != nil {
+	if err := downloadAndExtractPHP(fullVer, installDir, s.Stdout); err != nil {
 		return err
 	}
 
@@ -35,17 +50,13 @@ func WindowsInstall(base, ver string) error {
 		return fmt.Errorf("write php.ini: %w", err)
 	}
 
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return h.SetBinary(ver, binPath)
 }
 
-func WindowsRemove(base, ver string) error {
-	branch := majorMinor(ver)
-	installDir := phpInstallDir(base, branch)
+// Remove deletes the extracted build of ver.
+func (s *System) Remove(h *home.Dir, ver string) error {
+	branch := version.Branch(ver)
+	installDir := h.PHPDir(branch)
 
 	if _, err := os.Stat(installDir); os.IsNotExist(err) {
 		return fmt.Errorf("PHP %s is not installed", ver)
@@ -61,16 +72,10 @@ func resolveFullVersion(ver, branch string) (string, error) {
 	if len(strings.Split(ver, ".")) == 3 {
 		return ver, nil
 	}
-	return php.LatestPatch(context.Background(), branch)
+	return phpnet.LatestPatch(context.Background(), branch)
 }
 
-// phpInstallDir is the isolated directory for a PHP branch under pvm home.
-// e.g. %LOCALAPPDATA%\pvm\php\8.3
-func phpInstallDir(base, branch string) string {
-	return filepath.Join(base, "php", branch)
-}
-
-// WindowsEnsureExtensions enables exts in the php.ini of an installed version.
-func WindowsEnsureExtensions(base, ver string, exts []string) error {
-	return enableIniExtensions(phpInstallDir(base, majorMinor(ver)), exts)
+// AddExtensions enables exts in the php.ini of installed version ver.
+func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
+	return enableIniExtensions(h.PHPDir(version.Branch(ver)), exts)
 }

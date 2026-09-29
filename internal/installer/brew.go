@@ -1,22 +1,36 @@
-//go:build linux || darwin
+//go:build darwin
 
 package installer
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/version"
 )
 
-func BrewInstall(base, ver string) error {
-	branch := majorMinor(ver)
+// System installs PHP with Homebrew (php@X.Y).
+type System struct {
+	Stdout, Stderr io.Writer // where brew's output goes
+}
+
+// New returns the installer for this system.
+func New(stdout, stderr io.Writer) *System {
+	return &System{Stdout: stdout, Stderr: stderr}
+}
+
+// Install runs brew install php@X.Y and records its binary.
+func (s *System) Install(h *home.Dir, ver string) error {
+	branch := version.Branch(ver)
 	pkg := "php@" + branch
 
 	cmd := exec.Command("brew", "install", pkg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("brew install %s: %w\n\nMake sure Homebrew is installed: https://brew.sh", pkg, err)
 	}
@@ -26,23 +40,24 @@ func BrewInstall(base, ver string) error {
 		return err
 	}
 
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return h.SetBinary(ver, binPath)
 }
 
-func BrewRemove(base, ver string) error {
-	branch := majorMinor(ver)
+// Remove runs brew uninstall php@X.Y.
+func (s *System) Remove(h *home.Dir, ver string) error {
+	branch := version.Branch(ver)
 	cmd := exec.Command("brew", "uninstall", "php@"+branch)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("brew uninstall php@%s: %w", branch, err)
 	}
 	return nil
+}
+
+// AddExtensions is not supported: Homebrew's php@X.Y bundles the common
+// extensions, and PECL ones are not managed yet.
+func (s *System) AddExtensions(_ *home.Dir, _ string, exts []string) error {
+	return fmt.Errorf("pvm cannot install PHP extensions with Homebrew yet (%s)", strings.Join(exts, ", "))
 }
 
 func brewBinaryPath(branch string) (string, error) {

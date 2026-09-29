@@ -145,7 +145,7 @@ A project pins its version by committing a `.php-version` file (`8.3` or `8.3.30
 
 ### 3.5 Which PHP runs
 
-Every consumer uses the same resolution, `resolveActive` in `cmd/active.go`:
+Every consumer uses the same resolution, `pvm.Manager.Active` in `internal/pvm/active.go`:
 
 ```mermaid
 flowchart TD

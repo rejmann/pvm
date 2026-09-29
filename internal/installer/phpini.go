@@ -10,7 +10,7 @@ import (
 )
 
 // iniExtensions are the extensions pvm enables in the php.ini it writes for
-// the Windows builds: openssl so Composer can use HTTPS, then BaseExtensions
+// the Windows builds: openssl so Composer can use HTTPS, then phpext.Base
 // (xml is compiled in). Each one is enabled only when its DLL ships in ext\
 // (older builds compile zip in statically).
 var iniExtensions = []string{"openssl", "zip", "mbstring", "curl"}

@@ -118,7 +118,7 @@ func (f *fakeComposer) downloader() *Downloader {
 func TestEnsurePerPHPVersion(t *testing.T) {
 	f := newFakeComposer(t, false)
 	d := f.downloader()
-	base := t.TempDir()
+	root := t.TempDir()
 
 	var announced []string
 	onDownload := func(r Release) { announced = append(announced, r.Version) }
@@ -128,12 +128,12 @@ func TestEnsurePerPHPVersion(t *testing.T) {
 		{"5.6", "5.6.40", "2.2.30"},
 		{"8.3", "8.3.12", "2.10.3"}, // already there: no second download
 	} {
-		path, err := d.Ensure(context.Background(), base, c.installed, c.exact, onDownload)
+		path, err := d.Ensure(context.Background(), root, c.installed, c.exact, onDownload)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if path != PharPath(base, c.installed) {
-			t.Fatalf("path = %q, want %q", path, PharPath(base, c.installed))
+		if path != PharPath(root, c.installed) {
+			t.Fatalf("path = %q, want %q", path, PharPath(root, c.installed))
 		}
 		if data, _ := os.ReadFile(path); !strings.Contains(string(data), c.want) {
 			t.Errorf("PHP %s got phar %q, want Composer %s", c.installed, data, c.want)
@@ -144,7 +144,7 @@ func TestEnsurePerPHPVersion(t *testing.T) {
 		t.Errorf("downloads = %d, announced = %v; want 2 downloads of 2.10.3 and 2.2.30", f.downloads.Load(), announced)
 	}
 
-	home := Env(base, "8.3", func(string) string { return "" })["COMPOSER_HOME"]
+	home := Env(root, "8.3", func(string) string { return "" })["COMPOSER_HOME"]
 	for _, key := range []string{"keys.tags.pub", "keys.dev.pub"} {
 		if _, err := os.Stat(filepath.Join(home, key)); err != nil {
 			t.Errorf("%s not written to the Composer home: %v", key, err)
@@ -154,13 +154,13 @@ func TestEnsurePerPHPVersion(t *testing.T) {
 
 func TestEnsureRejectsBadSignature(t *testing.T) {
 	d := newFakeComposer(t, true).downloader()
-	base := t.TempDir()
+	root := t.TempDir()
 
-	_, err := d.Ensure(context.Background(), base, "8.3", "8.3.12", nil)
+	_, err := d.Ensure(context.Background(), root, "8.3", "8.3.12", nil)
 	if err == nil || !strings.Contains(err.Error(), "signature verification failed") {
 		t.Fatalf("error = %v", err)
 	}
-	if _, err := os.Stat(VersionDir(base, "8.3")); !os.IsNotExist(err) {
+	if _, err := os.Stat(VersionDir(root, "8.3")); !os.IsNotExist(err) {
 		t.Errorf("files left behind after a bad download: %v", err)
 	}
 }
@@ -176,10 +176,10 @@ func TestEnsureWithRealKeyRejectsOtherSigner(t *testing.T) {
 }
 
 func TestEnvAndRemove(t *testing.T) {
-	base := t.TempDir()
+	root := t.TempDir()
 
-	a := Env(base, "8.3", func(string) string { return "" })
-	b := Env(base, "7.4", func(string) string { return "" })
+	a := Env(root, "8.3", func(string) string { return "" })
+	b := Env(root, "7.4", func(string) string { return "" })
 	if a["COMPOSER_HOME"] == b["COMPOSER_HOME"] {
 		t.Errorf("PHP versions share COMPOSER_HOME %q", a["COMPOSER_HOME"])
 	}
@@ -187,7 +187,7 @@ func TestEnvAndRemove(t *testing.T) {
 		t.Errorf("cache not shared: %q vs %q", a["COMPOSER_CACHE_DIR"], b["COMPOSER_CACHE_DIR"])
 	}
 
-	custom := Env(base, "8.3", func(name string) string {
+	custom := Env(root, "8.3", func(name string) string {
 		if name == "COMPOSER_HOME" {
 			return "/custom"
 		}
@@ -197,16 +197,16 @@ func TestEnvAndRemove(t *testing.T) {
 		t.Errorf("Env overrides a variable the user set: %v", custom)
 	}
 
-	if err := os.MkdirAll(filepath.Join(VersionDir(base, "8.3"), "home"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(VersionDir(root, "8.3"), "home"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := Remove(base, "8.3"); err != nil {
+	if err := Remove(root, "8.3"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(VersionDir(base, "8.3")); !os.IsNotExist(err) {
-		t.Errorf("Remove left %s", VersionDir(base, "8.3"))
+	if _, err := os.Stat(VersionDir(root, "8.3")); !os.IsNotExist(err) {
+		t.Errorf("Remove left %s", VersionDir(root, "8.3"))
 	}
-	if err := Remove(base, "9.9"); err != nil {
+	if err := Remove(root, "9.9"); err != nil {
 		t.Errorf("Remove of a version without Composer: %v", err)
 	}
 }

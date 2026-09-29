@@ -67,3 +67,16 @@ func TestCompare(t *testing.T) {
 		}
 	}
 }
+
+func TestBranch(t *testing.T) {
+	tests := map[string]string{
+		"8.3.30": "8.3",
+		"8.3":    "8.3",
+		"8":      "8",
+	}
+	for in, want := range tests {
+		if got := Branch(in); got != want {
+			t.Errorf("Branch(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
