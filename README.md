@@ -4,22 +4,27 @@
 
 ## Installation
 
-The commands below always fetch the **latest** release from [GitHub Releases](https://github.com/rejmann/pvm/releases/latest) — no version number to update. Once installed, upgrade with `pvm self-upgrade` (prefix with `sudo` if pvm is in a root-owned directory such as `/usr/local/bin`).
+The commands below always fetch the **latest** release from [GitHub Releases](https://github.com/rejmann/pvm/releases/latest) — no version number to update. On Linux and macOS pvm goes into `~/.pvm/bin`, a directory you own next to its `php` shim: no `sudo` to install it, and `pvm self-upgrade` / `pvm self-remove` never need it either.
 
 ### Linux (x86_64)
 
 ```sh
+mkdir -p ~/.pvm/bin
 curl -fsSL https://github.com/rejmann/pvm/releases/latest/download/pvm-linux-amd64.tar.gz \
-  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+  | tar -xz -C ~/.pvm/bin pvm
+export PATH="$HOME/.pvm/bin:$PATH"   # add this line to ~/.bashrc / ~/.zshrc too
 ```
 
 ### macOS (Apple Silicon)
 
 ```sh
-sudo mkdir -p /usr/local/bin
+mkdir -p ~/.pvm/bin
 curl -fsSL https://github.com/rejmann/pvm/releases/latest/download/pvm-darwin-arm64.tar.gz \
-  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+  | tar -xz -C ~/.pvm/bin pvm
+export PATH="$HOME/.pvm/bin:$PATH"   # add this line to ~/.zshrc too
 ```
+
+> If `PVM_HOME` is set, use `$PVM_HOME/bin` instead of `~/.pvm/bin`. Upgrading from an install in `/usr/local/bin`? Install as above, then `sudo rm /usr/local/bin/pvm` once.
 
 ### Windows (PowerShell)
 
@@ -48,7 +53,7 @@ Replace `latest/download` with `download/<tag>` in any of the commands above. Fo
 ```sh
 VERSION=v1.0.1
 curl -fsSL "https://github.com/rejmann/pvm/releases/download/${VERSION}/pvm-linux-amd64.tar.gz" \
-  | sudo tar -xz --no-same-owner -C /usr/local/bin pvm
+  | tar -xz -C ~/.pvm/bin pvm
 ```
 
 On Windows, set the URL in the PowerShell snippet to:
@@ -118,16 +123,16 @@ pvm self-remove
 | macOS | [Homebrew](https://brew.sh) |
 | Windows | No external dependency — PHP is downloaded directly from [windows.php.net](https://windows.php.net) and pvm writes its `php.ini` |
 
-pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the base extensions `zip`, `xml`, `mbstring` and `curl` (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer. Any other extension is one `pvm ext add` away, and `pvm composer` offers the ones a project requires before running. On Linux, pvm asks for your sudo password once per command, when it first needs root.
+pvm detects the package manager automatically on Linux — no configuration needed. `pvm install` also adds the base extensions `zip`, `xml`, `mbstring` and `curl` (and on Windows enables `openssl`), so `pvm composer` needs nothing else on the machine — no `unzip`, `7z` or global Composer. Any other extension is one `pvm ext add` away, and `pvm composer` offers the ones a project requires before running. On Linux, only installing or removing PHP and its extensions goes through the package manager, so `install`, `remove` and `ext add/remove/enable/disable` ask for your sudo password once per command; everything else, `pvm use` included, runs without root.
 
 ## PATH setup
 
-After the first `pvm use`, add the pvm shim directory to your PATH once:
+The pvm directory on your PATH holds both `pvm` and the `php` shim, so one entry covers them (on Linux and macOS it is the one from the installation above):
 
 | OS | Directory | Shell config |
 |----|-----------|--------------|
 | Linux | `~/.pvm/bin` | `export PATH="$HOME/.pvm/bin:$PATH"` in `~/.bashrc` / `~/.zshrc` |
-| macOS | `~/.pvm/shims` | `export PATH="$HOME/.pvm/shims:$PATH"` |
+| macOS | `~/.pvm/bin` | `export PATH="$HOME/.pvm/bin:$PATH"` in `~/.zshrc` (older pvm used `~/.pvm/shims`: replace it) |
 | Windows | `%LOCALAPPDATA%\pvm\shims` | `setx PATH "%LOCALAPPDATA%\pvm\shims;%PATH%"` |
 
 > `pvm use` prints the exact command if the directory is not yet in your PATH.

@@ -4,5 +4,6 @@
 # only when the build is newer: an upgraded binary sticks until the code changes.
 set -e
 
-cp -u /app/.local/bin/pvm /usr/local/bin/pvm
+mkdir -p "$HOME/.pvm/bin"
+cp -u /app/.local/bin/pvm "$HOME/.pvm/bin/pvm"
 exec "$@"

@@ -98,7 +98,7 @@ Any other extension is added with [`pvm ext add`](#pvm-ext), or on demand by `pv
 
 ### Administrator rights (Linux)
 
-apt, dnf, yum, pacman, zypper and `update-alternatives` need root. Before the first of them runs, pvm checks whether sudo already has your credentials (`sudo -n true`); if not, it says why it needs them and runs `sudo -v`, which asks for your password once on the terminal — then the whole command (repository, PHP, extensions, `update-alternatives`) goes on without stopping again. A wrong password fails with `sudo authentication failed`; with no terminal to ask on (CI, cron) pvm fails right away and tells you to run it from a terminal or as root. As root (e.g. in a container), commands run directly and sudo is not needed.
+Only the package managers (apt, dnf, yum, pacman, zypper) need root, so only `pvm install`, `pvm remove` and `pvm ext add/remove/enable/disable` on Linux can ask for your password; `pvm use` and everything else never do, and pvm itself lives in `~/.pvm/bin`, which you own. Before the first root command runs, pvm checks whether sudo already has your credentials (`sudo -n true`); if not, it says why it needs them and runs `sudo -v`, which asks for your password once on the terminal — then the whole command (repository, PHP, extensions) goes on without stopping again. A wrong password fails with `sudo authentication failed`; with no terminal to ask on (CI, cron) pvm fails right away and tells you to run it from a terminal or as root. As root (e.g. in a container), commands run directly and sudo is not needed.
 
 ### Windows install directory
 
@@ -147,8 +147,7 @@ pvm use           # activates the version in ./.php-version (or a parent directo
 
 | OS | Mechanism |
 |----|-----------|
-| Linux | `sudo update-alternatives --set php <binary>` + `~/.pvm/bin/php` shim script |
-| macOS | Shim script at `~/.pvm/shims/php` |
+| Linux, macOS | Shim script at `~/.pvm/bin/php` — no root: `/usr/bin/php` is left to the system (services and cron that don't use your `PATH` can name the binary from `pvm which`) |
 | Windows | Batch shim at `%LOCALAPPDATA%\pvm\shims\php.bat` pointing to the installed `php.exe` |
 
 ### Typical workflow
@@ -463,7 +462,6 @@ Flags:
 pvm self-upgrade           # latest release
 pvm self-upgrade --check   # pvm v1.2.0 is available (current: v1.1.0). Run: pvm self-upgrade
 pvm self-upgrade v1.1.0    # a specific release
-sudo pvm self-upgrade      # when pvm lives in a root-owned directory such as /usr/local/bin
 ```
 
 ### What it does
@@ -473,7 +471,7 @@ sudo pvm self-upgrade      # when pvm lives in a root-owned directory such as /u
 3. Downloads `pvm-<os>-<arch>.tar.gz` (Windows: `.zip`) for that tag and extracts the `pvm` binary.
 4. Writes it next to the running binary (symlinks resolved) and renames it over the old one, so a failed upgrade never leaves a broken binary. On Windows the running `pvm.exe` is first moved to `pvm.exe.old`, which the next upgrade removes.
 
-If the directory is not writable, it fails with `permission denied` and suggests re-running with `sudo`. On Windows the hint is to run it from a terminal opened as Administrator. Every published platform can self-upgrade: Linux (amd64, arm64), macOS (amd64, arm64) and Windows amd64; releases published before a platform was added fail with `has no build for <os>/<arch>`.
+It never needs `sudo`. Installed as the README shows (`~/.pvm/bin` on Linux and macOS), the binary is yours and is replaced in place. An older install in a root-owned directory such as `/usr/local/bin` is left alone: the new pvm is written to `~/.pvm/bin` (the pvm home's `bin`) instead, the `php` shim is pointed at it, and pvm says the old binary can be deleted and prints the `export PATH=...` line if `~/.pvm/bin` does not come first in `PATH` yet. On Windows the hint is to run it from a terminal opened as Administrator. Every published platform can self-upgrade: Linux (amd64, arm64), macOS (amd64, arm64) and Windows amd64; releases published before a platform was added fail with `has no build for <os>/<arch>`.
 
 ## `pvm self-remove`
 
@@ -503,6 +501,6 @@ pvm self-remove --yes    # no prompt, e.g. in scripts
 4. Deletes the data directory.
 5. Deletes the pvm binary. On Windows a running `.exe` cannot be deleted, so it is renamed and a background `cmd.exe` deletes it — and its directory, if left empty — right after pvm exits.
 
-Run it as your regular user, not with `sudo`: under `sudo` the data directory would resolve to root's home. If the binary lives in a root-owned directory such as `/usr/local/bin`, everything else is removed and the command ends with `permission denied — finish with: sudo rm /usr/local/bin/pvm`.
+Run it as your regular user, not with `sudo`: under `sudo` the data directory would resolve to root's home. Installed as the README shows, the binary is in `~/.pvm/bin` and goes with the data directory. An older install in a root-owned directory such as `/usr/local/bin` cannot be deleted by pvm: everything else is removed and the command ends with `permission denied — finish with: sudo rm /usr/local/bin/pvm`.
 
 It refuses to run when `PVM_HOME` points at the home or root directory, since the whole data directory is deleted. pvm never edits shell config files, so on Linux and macOS remove the `export PATH="$HOME/.pvm/..."` line yourself.

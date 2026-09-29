@@ -7,7 +7,7 @@
 //	versions/<v>/system      v was installed outside pvm: adopted, never uninstalled
 //	system-checked           pvm already looked for a PHP installed before it
 //	php/<branch>/            PHP builds pvm extracted itself (Windows)
-//	bin/ or shims/           the php shim, the directory users add to PATH
+//	bin/ or shims/           the php shim (and on Linux/macOS pvm itself), the directory users add to PATH
 //	cache/                   cached php.net data
 //	composer/                everything pvm composer keeps
 package home

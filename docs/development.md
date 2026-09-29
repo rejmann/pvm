@@ -8,7 +8,7 @@ The Makefile only calls `docker compose` (and `docker version`, to learn the hos
 |--------|---------|------|
 | `cli/go-entrypoint` | `go` service | creates `dist/` and `.local/`, then runs the command as the owner of the project directory (so outputs are yours, without `id -u` on the host) |
 | `cli/build` | `go` service | `go build` with the version from `git describe` |
-| `cli/pvm` | `app-pvm` container | refreshes `/usr/local/bin/pvm` from the build, then runs `pvm` or `bash` |
+| `cli/pvm` | `app-pvm` container | refreshes `~/.pvm/bin/pvm` (where the README installs it) from the build, then runs `pvm` or `bash` |
 | `cli/help.awk` | `go` service | `make help`: lists every `target: ## description` line of the Makefile |
 
 To document a new target, end its rule with `## description` — `make help` picks it up. `.gitattributes` keeps these scripts with LF line endings on Windows checkouts.
@@ -30,7 +30,7 @@ make setup        # build the Docker images (the other targets also run it, cach
 
 ## Running pvm during development
 
-**pvm under development always runs inside a Docker container, never on your machine.** `pvm install`, `use` and `remove` call `sudo apt` and `sudo update-alternatives` on Linux, so a dev build run on the host would change your real `~/.pvm` and your system PHP.
+**pvm under development always runs inside a Docker container, never on your machine.** `pvm install`, `remove` and `ext` call `sudo apt` on Linux, and every command uses `~/.pvm`, so a dev build run on the host would change your real pvm and your system PHP.
 
 ```sh
 make pvm install 8.5
@@ -45,7 +45,7 @@ make down             # back to a clean container
 
 `make pvm` starts the `pvm` service in the background (`make up`) — the Dockerfile's `runtime` stage, Ubuntu 24.04 with apt and the ondrej/php PPA — and runs `pvm <args>` in it with `docker compose exec`. The container keeps running between commands, so installed PHP versions and the active version persist until `make down`. The project is mounted read-only at `/app` (the working directory), so PHP can run files from the repo — `make pvm run 8.5 teste.php` — but nothing in the container can change them (writing a `.php-version` there fails with "read-only file system").
 
-The container runs a copy of the build at `/usr/local/bin/pvm`, which `make pvm` / `make shell` refresh with `cp -u` — only when `.local/bin/pvm` is newer. That lets `make pvm self-upgrade` replace it with a real release: the upgraded binary stays in use until you change the code (the rebuild is newer, so it is copied back) or run `make down`. Flags after `pvm` need `--` or `ARGS`, since make would parse them itself: `make pvm -- run 8.5 --file teste.php`.
+The container runs a copy of the build at `~/.pvm/bin/pvm`, which `make pvm` / `make shell` refresh with `cp -u` — only when `.local/bin/pvm` is newer. That lets `make pvm self-upgrade` replace it with a real release: the upgraded binary stays in use until you change the code (the rebuild is newer, so it is copied back) or run `make down`. Flags after `pvm` need `--` or `ARGS`, since make would parse them itself: `make pvm -- run 8.5 --file teste.php`.
 
 Downloaded PHP packages are cached in `.local/apt/archives` (gitignored, mounted into the container), so after `make down` the next `pvm install` of the same version doesn't download anything again. The files there are created by root inside the container; to clear the cache without `sudo`, run `docker compose run --rm --entrypoint rm go -rf .local/apt` (skipping the entrypoint keeps the container as root).
 
@@ -86,7 +86,7 @@ make lint
 
 CI (`.github/workflows/ci.yml`) runs `go vet` and `go test -race` on Linux, macOS and Windows for every pull request.
 
-Tests must not touch the real system: use `home.New(t.TempDir())` as the pvm home and give `pvm.Manager` fakes of its interfaces (`Installer`, `Activator`, `version.Resolver`; for `pvm.Composer` also `ExtensionInstaller`, `ComposerSource` and the `Probe`/`Exec` functions). The real `installer.System` and `shim.Activator` run `sudo`, so they only run in the container (`make pvm`).
+Tests must not touch the real system: use `home.New(t.TempDir())` as the pvm home and give `pvm.Manager` fakes of its interfaces (`Installer`, `Activator`, `version.Resolver`; for `pvm.Composer` also `ExtensionInstaller`, `ComposerSource` and the `Probe`/`Exec` functions). The real `installer.System` runs `sudo` on Linux and `shim.Activator` writes to the pvm home, so they only run in the container (`make pvm`).
 
 ## Project conventions
 
@@ -186,7 +186,7 @@ func (s stubResolver) ResolveLTS() (string, error) { return s.v, nil }
 
 ```go
 ver, err := h.Current()                        // home: read current-version
-err := activator.Activate(h, "8.3", "/usr/bin/php8.3") // shim + update-alternatives (Linux) + current-version
+err := activator.Activate(h, "8.3", "/usr/bin/php8.3") // shim + current-version
 err := activator.Deactivate(h)
 ```
 
@@ -226,7 +226,7 @@ Both return JSON, decoded by the generic `getJSON[T any]` in `internal/phpnet/ht
 | Path (Linux/macOS) | Path (Windows) | Purpose |
 |---|---|---|
 | `~/.pvm/versions/<ver>/binary` | `%LOCALAPPDATA%\pvm\versions\<ver>\binary` | Path to the PHP binary for `<ver>` |
-| `~/.pvm/bin/php` | — | Shim script → `pvm shim php` (Linux) |
-| `~/.pvm/shims/php` | `%LOCALAPPDATA%\pvm\shims\php.bat` | Shim (macOS/Windows) |
+| `~/.pvm/bin/php` | `%LOCALAPPDATA%\pvm\shims\php.bat` | Shim |
+| `~/.pvm/bin/pvm` | `%LOCALAPPDATA%\Programs\pvm\pvm.exe` | pvm itself |
 | `~/.pvm/current-version` | `%LOCALAPPDATA%\pvm\current-version` | Active version name |
 | `~/.pvm/php/<branch>/` | `%LOCALAPPDATA%\pvm\php\<branch>\` | Extracted PHP install (Windows only) |

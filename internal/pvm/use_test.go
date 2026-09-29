@@ -35,7 +35,7 @@ func TestUse(t *testing.T) {
 	t.Run("activation fails", func(t *testing.T) {
 		m, _, act := newTestManager(t)
 		fakeInstall(t, m.Home, "8.2")
-		boom := errors.New("update-alternatives failed")
+		boom := errors.New("activation failed")
 		act.err = boom
 
 		if err := m.Use(Target{Version: "8.2"}); !errors.Is(err, boom) {

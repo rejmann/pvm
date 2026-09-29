@@ -1,5 +1,5 @@
-// Package sudo runs the commands pvm needs root for (package managers,
-// update-alternatives) the way a user expects from a terminal: the password
+// Package sudo runs the commands pvm needs root for (the Linux package
+// managers, to install PHP and its extensions) the way a user expects from a terminal: the password
 // is asked once, up front, and every command after it reuses sudo's cached
 // credentials. As root, commands run directly and sudo is not needed.
 package sudo
