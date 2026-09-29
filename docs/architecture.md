@@ -47,8 +47,7 @@ pvm/
     │   ├── confd.go            # Linux/macOS: turn extensions on/off in the ini scan dir
     │   └── phpini.go           # php.ini for the Windows builds
     ├── shim/                   # switches the global version: Activator per OS
-    │   ├── activate_linux.go   # shim + update-alternatives
-    │   ├── activate_darwin.go  # shim
+    │   ├── activate_unix.go    # Linux/macOS: shim only, no root
     │   ├── activate_windows.go # php.bat, user PATH, PowerShell wrapper (pswrapper.go)
     │   └── shim_unix.go        # the #!/bin/sh php shim
     ├── composer/               # composer.phar download + signature, env, Output parser,
@@ -72,13 +71,13 @@ flowchart LR
     cmd --> installer & shim & composer & process & sysphp & phpnet & selfupdate & home
     pvm --> home & composer & process & project & sysphp & version
     installer --> home & phpext & phpnet & sudo & version
-    shim --> home & sudo & version
+    shim --> home & version
     composer & home & phpnet & sysphp --> version
     composer & sysphp --> phpext
     sysphp --> process
 ```
 
-(`installer → phpnet` and `shim → version` exist only in the Windows build, `installer → sudo` and `shim → sudo` only in the Linux build.)
+(`installer → phpnet` and `shim → version` exist only in the Windows build, `installer → sudo` only in the Linux build.)
 
 `cmd` is the only package that knows every other one: it builds the concrete installer, activator, Composer downloader and process runner and hands them to `internal/pvm`. Nothing in `internal/` imports `cmd`, and `internal/pvm` never imports `installer` or `shim`.
 
@@ -100,10 +99,9 @@ flowchart LR
 │       └── 8.3/               # one per PHP version; removed by pvm remove
 │           ├── composer.phar  # newest Composer supporting this PHP
 │           └── home/          # COMPOSER_HOME: config, auth.json, global packages, backups
-├── bin/
-│   └── php                    # shim script → `pvm shim php` (Linux)
-├── shims/
-│   └── php                    # shim script → `pvm shim php` (macOS)
+├── bin/                       # the one directory on PATH
+│   ├── pvm                    # pvm itself, installed here by the README
+│   └── php                    # shim script → `pvm shim php`
 └── versions/
     ├── 8.3/
     │   ├── binary             # plain text: /usr/bin/php8.3
@@ -169,8 +167,7 @@ cmd.useVersion
   └─ pvm.Manager.Use(target)
        ├─ home.Installed() · home.Binary()
        └─ Activator.Activate(home, ver, bin) ← shim.Activator of this OS
-            ├─ Linux:   sudo update-alternatives --set php <bin> + EnsureShim + home.SetCurrent
-            ├─ macOS:   EnsureShim + home.SetCurrent
+            ├─ Linux, macOS: EnsureShim + home.SetCurrent (no root)
             └─ Windows: php.bat + user PATH + PowerShell wrapper + home.SetCurrent
   └─ printPathHint() if the shim dir is not on PATH
 ```
@@ -245,7 +242,7 @@ enable / disable → installer.System.SetExtensionsEnabled
                    (apt: phpenmod/phpdismod · Remi, zypper, pacman, brew: rename in the ini scan dir · Windows: php.ini)
 ```
 
-Every root command on Linux goes through `sudo.Command`, after one `sudo.Authenticate` per operation: the password is asked once, before anything runs.
+Every root command on Linux (only the package managers) goes through `sudo.Command`, after one `sudo.Authenticate` per operation: the password is asked once, before anything runs.
 
 ## Data flow — `pvm self-upgrade [tag]`
 
@@ -272,14 +269,14 @@ cmd.runSelfRemove
 
 ## Key design decisions
 
-- **Use cases in `internal/pvm`, behind small interfaces** — install, use, remove, version resolution and the Composer flow are tested with fakes of `Installer`, `Activator`, `ExtensionInstaller`, `ExtensionManager` and `ComposerSource`, so the rules (including a successful `pvm use`, which on Linux runs `sudo update-alternatives`) are covered without touching the system.
+- **Use cases in `internal/pvm`, behind small interfaces** — install, use, remove, version resolution and the Composer flow are tested with fakes of `Installer`, `Activator`, `ExtensionInstaller`, `ExtensionManager` and `ComposerSource`, so the rules are covered without touching the system.
 - **One type per OS, chosen by build tags** — `installer.System` and `shim.Activator` have one implementation per OS file. Supporting a new platform means adding files, not editing `switch` statements.
 - **`internal/home` owns the layout** — installers record binaries and packages through it, Composer and the php.net cache get their paths from it, and `pvm self-remove` deletes one directory. The default location (`$PVM_HOME`, `~/.pvm`, `%LOCALAPPDATA%\pvm`) is decided there too.
 - **Windows: direct download instead of a package manager** — winget treats all PHP versions as the same product (shared Windows Installer GUID), making side-by-side installs impossible. Downloading zips from `windows.php.net` lets pvm own every version in its own isolated directory.
 - **`version.Resolver` interface** — decouples alias resolution from the php.net API, enabling unit-testing without network calls.
 - **`binary` file** — stores only the resolved binary path, keeping version detection O(1) (one file read + stat).
 - **Concurrent branch fetching** — `FetchAllBranches` fans out one goroutine per active major version, reducing latency when php.net is slow.
-- **`current-version` file** — plain-text file tracking the global version; used by `pvm list` and as the shim's fallback. On Linux it is complementary to `update-alternatives`, which keeps `/usr/bin/php` pointing at the global version for services that do not use the shim.
+- **`current-version` file** — plain-text file tracking the global version; used by `pvm list` and as the shim's fallback. pvm never changes `/usr/bin/php` (that would need root): services that do not use the shim name the binary from `pvm which`.
 - **Composer downloaded on demand, not installed globally** — `pvm composer` fetches `composer.phar` into the pvm home on first use instead of at pvm install time, so users who never run Composer never download it, and no `composer` binary competes with one already on `PATH`. Composer's config and cache go under the pvm home too, so everything pvm brings in is removed by `pvm remove` / `pvm self-remove`, and `pvm composer` only runs PHP versions pvm manages.
 - **One Composer per PHP version** — the phar, `self-update` backups and global packages all depend on the PHP running Composer, so sharing them lets one version break another (a `self-update` under 8.5 to a Composer that 7.4 cannot run, a `--rollback` restoring another version's backup, global tools resolved for the wrong PHP). Each version gets its own phar and `COMPOSER_HOME`; only the PHP-independent download cache is shared. The release is chosen from getcomposer.org/versions by `min-php`, as `self-update` does, instead of a hard-coded PHP → Composer table, and verified with Composer's signing key.
 - **Missing extensions read from Composer's output** — Composer runs as a child with its stderr watched by `composer.Output`, since Symfony Flex exits 0 after a failed update in `create-project`; the exit code alone would miss it.

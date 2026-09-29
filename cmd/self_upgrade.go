@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/rejmann/pvm/cmd/selfupgrade"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/selfupdate"
 	"github.com/spf13/cobra"
 )
@@ -20,8 +21,11 @@ Without arguments it installs the latest release; pass a tag (e.g. v1.2.0) to
 install that one instead, which also allows downgrading. Use --check to only
 report whether a newer release exists.
 
-If pvm lives in a directory you can't write to (e.g. /usr/local/bin), run it
-with sudo (Windows: from a terminal opened as Administrator).`,
+It never needs sudo. pvm installed as the README shows (~/.pvm/bin on Linux
+and macOS) is replaced in place. An older install in a root-owned directory
+such as /usr/local/bin is left alone: the new pvm goes into ~/.pvm/bin
+instead, the php shim is pointed at it, and pvm tells you if that directory
+must come first in your PATH.`,
 		Example: `  pvm self-upgrade
   pvm self-upgrade --check
   pvm self-upgrade v1.2.0`,
@@ -51,5 +55,11 @@ func runSelfUpgrade(cmd *cobra.Command, args []string, current string) error {
 		return fmt.Errorf("locate pvm binary: %w", err)
 	}
 
-	return selfupgrade.Run(cmd.Context(), selfupdate.New(), exe, current, tag, check, cmd.OutOrStdout())
+	h := home.Default()
+	out := cmd.OutOrStdout()
+	now, err := selfupgrade.Run(cmd.Context(), selfupdate.New(), exe, current, tag, check, selfupgrade.FallbackDir(h), out)
+	if err != nil || now == exe {
+		return err
+	}
+	return selfupgrade.Moved(h, exe, now, out)
 }

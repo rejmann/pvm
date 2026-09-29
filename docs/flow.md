@@ -30,7 +30,7 @@ flowchart LR
     subgraph home["#lt;pvm-home#gt;"]
         versions["versions/#lt;v#gt;/binary"]
         current["current-version"]
-        shim["bin/php · shims/php · shims/php.bat"]
+        shim["bin/php · shims/php.bat"]
         composer["composer/"]
         cache["cache/available.json"]
     end
@@ -70,7 +70,8 @@ Three ideas carry the whole design:
 | `current-version` | the global version, e.g. `8.3` | `use`, or the first run when adopting the PHP installed before pvm | `list`, `current`, `which`, `run`, `composer`, the shim | `remove` of the active version (Linux/macOS), `self-remove` |
 | `versions/<v>/system` | empty marker: `<v>` was installed outside pvm and only adopted — `remove` forgets it, never uninstalls it | first run (adoption) | `list`, `current`, `remove`, `self-remove` | `remove`, `self-remove` |
 | `system-checked` | empty marker: pvm already looked for a PHP installed before it | first run | every command that reads the global version | `self-remove` |
-| `bin/php` (Linux) · `shims/php` (macOS) | `#!/bin/sh` shim: `exec pvm shim php "$@"` | `use` | the shell, via `PATH` | `self-remove` |
+| `bin/pvm` (Linux, macOS) | pvm itself, installed there by the README | the user | the shell, via `PATH` | `self-remove` |
+| `bin/php` (Linux, macOS) | `#!/bin/sh` shim: `exec pvm shim php "$@"` | `use` | the shell, via `PATH` | `self-remove` |
 | `shims\php.bat` (Windows) | batch shim running `php\<current-version>\php.exe` | `use` | the shell, via `PATH` | `self-remove` |
 | `php\<branch>\` (Windows) | the extracted PHP build, with the `php.ini` pvm writes | `install` | the shims, via `binary` | `remove`, `self-remove` |
 | `cache/available.json` | php.net branch list, valid 24 h | `available` | `available` | `self-remove` |
@@ -84,7 +85,6 @@ Outside `<pvm-home>`, pvm touches only what the platform requires:
 | Where | What | Set by | Undone by |
 |-------|------|--------|-----------|
 | Linux system packages | `php<X.Y>-cli` and the extension packages listed in `versions/<X.Y>/packages` (apt/dnf/yum/zypper) | `install`, `ext add` (`sudo`, password asked once) | `remove`, `ext remove`, `self-remove --php` |
-| Linux `update-alternatives` | `/usr/bin/php` → the global version, for services that don't use the shim | `use` (`sudo`) | `remove` of the active version (`--auto`) |
 | `~/.local/bin/php` (Linux) | updated **only if it already is a symlink** | `use` | — |
 | Homebrew | `php@X.Y` | `install` | `remove`, `self-remove --php` |
 | Windows user `PATH` | `<pvm-home>\shims` prepended | `use` | `self-remove` |
@@ -131,8 +131,7 @@ flowchart TD
 1. The version comes from the argument, or — with none — from the nearest `.php-version`.
 2. `lts` is resolved; the version must be installed.
 3. Per OS:
-   - **Linux**: `sudo update-alternatives --set php <binary>` (so `/usr/bin/php` follows too), writes the `bin/php` shim, updates `~/.local/bin/php` if it is a symlink.
-   - **macOS**: writes the `shims/php` shim.
+   - **Linux, macOS**: writes the `bin/php` shim and updates `~/.local/bin/php` if it is a symlink — no root: `/usr/bin/php` is left to the system.
    - **Windows**: writes `shims\php.bat`, prepends `shims` to the user `PATH`, adds or refreshes the `# pvm-wrapper` block in `$PROFILE`.
 4. Writes `current-version`.
 5. If the shim directory is not in `PATH`, prints the line to add (Linux/macOS) or `. $PROFILE` (Windows). This is the only manual step pvm ever asks for.
@@ -254,7 +253,7 @@ flowchart TD
 1. The version must be given exactly as installed (see `pvm list`).
 2. Uninstalls it: Linux removes the extension packages pvm installed, then `php<X.Y>-cli`; macOS the extension formulas pvm installed, then `brew uninstall php@X.Y`; Windows deletes `php\<branch>\`.
 3. Deletes `versions/<v>/` and `composer/php/<v>/`.
-4. If it was the active global version: Linux runs `update-alternatives --auto php`; Linux/macOS delete `current-version`; a warning says no version is active. **Windows:** `current-version` is currently left in place (removing the global version there is not implemented yet), so `pvm use <other>` should follow.
+4. If it was the active global version: Linux/macOS delete `current-version`; a warning says no version is active. **Windows:** `current-version` is currently left in place (removing the global version there is not implemented yet), so `pvm use <other>` should follow.
 
 Projects whose `.php-version` names the removed version now fail with `PHP X is not installed — run: pvm install X`; pvm never silently switches them to another version.
 
@@ -264,9 +263,9 @@ Projects whose `.php-version` names the removed version now fail with `PHP X is 
 2. Target tag: the one given, or the latest GitHub release. Same as the running version → stops. `--check` only reports.
 3. Downloads `pvm-<os>-<arch>.tar.gz` (Windows `.zip`) and extracts the binary.
 4. Writes it next to the running binary and renames it into place; on Windows the running `.exe` is first moved to `pvm.exe.old`. A failure never leaves a half-written binary.
-5. Not writable → `permission denied` with the `sudo` / Administrator hint.
+5. Not writable (Linux/macOS: an old install in e.g. `/usr/local/bin`) → the new binary goes to `<pvm-home>/bin/pvm` instead, with no `sudo`; the `bin/php` shim is rewritten to run it, and pvm tells you to put `<pvm-home>/bin` first in `PATH` if it is not. Windows → `permission denied` with the Administrator hint.
 
-`<pvm-home>` is untouched: installed versions, shims and Composer keep working. The shim embeds the pvm path, which does not change.
+`<pvm-home>` is untouched: installed versions, shims and Composer keep working. The shim embeds the pvm path, which only changes in the fallback of step 5, where pvm rewrites it.
 
 ### 3.11 Uninstall — `pvm self-remove`
 
@@ -305,9 +304,10 @@ Linux, starting from nothing:
 |---|---|---|---|
 | PHP comes from | apt / dnf / yum / pacman / zypper (`sudo`) | Homebrew | windows.php.net zip, into `<pvm-home>\php` |
 | Extensions for Composer | extra packages (apt/dnf/yum), more on demand | built in | `php.ini` written by pvm |
-| Shim | `~/.pvm/bin/php` (sh) | `~/.pvm/shims/php` (sh) | `shims\php.bat` |
+| Shim | `~/.pvm/bin/php` (sh) | `~/.pvm/bin/php` (sh) | `shims\php.bat` |
+| pvm binary | `~/.pvm/bin/pvm` | `~/.pvm/bin/pvm` | `%LOCALAPPDATA%\Programs\pvm` |
 | `php` honours `.php-version` / `PVM_VERSION` | yes | yes | no — global only |
-| System `/usr/bin/php` follows `pvm use` | yes (`update-alternatives`) | no | — |
+| System `/usr/bin/php` follows `pvm use` | no (would need root) | no | — |
 | `PATH` setup | one manual `export` | one manual `export` | automatic (user `PATH` + `$PROFILE`) |
 | `pvm run` / `pvm composer` start php by | `exec` | `exec` | child process |
 | `self-remove` without `--php` keeps PHP | yes | yes | no (lives in `<pvm-home>`) |

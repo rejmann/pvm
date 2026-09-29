@@ -20,7 +20,13 @@ func EnsureShim(h *home.Dir) error {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	return writeShim(filepath.Join(h.ShimDir(), "php"), exe)
+	return WriteShim(h, exe)
+}
+
+// WriteShim (re)writes the php shim of h to run the pvm binary pvmExe, e.g.
+// after pvm self-upgrade moved pvm into the pvm home.
+func WriteShim(h *home.Dir, pvmExe string) error {
+	return writeShim(filepath.Join(h.ShimDir(), "php"), pvmExe)
 }
 
 // shimScript delegates to `pvm shim php`, which picks the version for the

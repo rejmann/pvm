@@ -25,6 +25,6 @@ RUN apt-get update \
 
 # pvm itself is not in the image: it is built into .local/bin, which the container
 # sees through the (read-only) project mount, so code changes don't recreate the
-# container. `make pvm` / `make shell` copy it to /usr/local/bin, a writable
-# location, so `pvm self-upgrade` can replace it.
+# container. `make pvm` / `make shell` copy it to ~/.pvm/bin, where the README
+# installs it, so `pvm self-upgrade` can replace it.
 ENV PATH=/root/.pvm/bin:$PATH

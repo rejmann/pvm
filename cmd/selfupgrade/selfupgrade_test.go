@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -87,7 +89,7 @@ func TestRun(t *testing.T) {
 			exe := fakeExe(t)
 			var out bytes.Buffer
 
-			if err := Run(context.Background(), u, exe, tt.current, tt.tag, tt.check, &out); err != nil {
+			if _, err := Run(context.Background(), u, exe, tt.current, tt.tag, tt.check, "", &out); err != nil {
 				t.Fatal(err)
 			}
 
@@ -106,7 +108,7 @@ func TestRunUnknownTag(t *testing.T) {
 	u := newReleaseServer(t, "v1.2.0", "v1.2.0")
 	exe := fakeExe(t)
 
-	err := Run(context.Background(), u, exe, "v1.2.0", "v9.9.9", false, &bytes.Buffer{})
+	_, err := Run(context.Background(), u, exe, "v1.2.0", "v9.9.9", false, "", &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "has no build for linux/amd64") {
 		t.Fatalf("error = %v, want missing build", err)
 	}
@@ -114,4 +116,43 @@ func TestRunUnknownTag(t *testing.T) {
 	if string(got) != "pvm current" {
 		t.Errorf("binary changed to %q after a failed upgrade", got)
 	}
+}
+
+func TestRunFallsBackWhenNotWritable(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a directory the test cannot write to")
+	}
+	u := newReleaseServer(t, "v1.2.0", "v1.2.0")
+	exe := fakeExe(t)
+	dir := filepath.Dir(exe)
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	fallback := filepath.Join(t.TempDir(), "bin")
+
+	var out bytes.Buffer
+	now, err := Run(context.Background(), u, exe, "v1.0.0", "", false, fallback, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(fallback, "pvm"); now != want {
+		t.Errorf("Run = %q, want %q", now, want)
+	}
+	if got, _ := os.ReadFile(now); string(got) != "pvm v1.2.0" {
+		t.Errorf("new binary = %q", got)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "pvm current" {
+		t.Errorf("old binary changed to %q", got)
+	}
+	if !strings.Contains(out.String(), "is not writable, so pvm is now installed in "+fallback) {
+		t.Errorf("output = %q", out.String())
+	}
+
+	t.Run("no fallback", func(t *testing.T) {
+		_, err := Run(context.Background(), u, exe, "v1.0.0", "", false, "", &bytes.Buffer{})
+		if !errors.Is(err, selfupdate.ErrPermission) {
+			t.Errorf("error = %v, want ErrPermission", err)
+		}
+	})
 }

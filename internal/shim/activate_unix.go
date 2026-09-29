@@ -1,19 +1,21 @@
+//go:build !windows
+
 package shim
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/rejmann/pvm/internal/home"
-	"github.com/rejmann/pvm/internal/sudo"
 )
 
-// Activator switches the global version with the shim and update-alternatives.
+// Activator switches the global version with the shim. It never needs root:
+// /usr/bin/php is left to the system, and programs that do not go through
+// PATH (services, cron) should name the version's binary (pvm which).
 type Activator struct {
-	Stdout, Stderr io.Writer // where update-alternatives' output goes
+	Stdout, Stderr io.Writer
 }
 
 // New returns the activator for this system.
@@ -23,18 +25,12 @@ func New(stdout, stderr io.Writer) *Activator {
 
 // Activate makes ver, whose php binary is bin, the global version.
 func (a *Activator) Activate(h *home.Dir, ver, bin string) error {
-	if err := sudo.Authenticate(a.Stderr, "switch the system php with update-alternatives"); err != nil {
-		return err
-	}
-	cmd := sudo.Command("update-alternatives", "--set", "php", bin)
-	cmd.Stdout, cmd.Stderr = a.Stdout, a.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("update-alternatives --set php %s: %w", bin, err)
-	}
-
 	if err := EnsureShim(h); err != nil {
 		return fmt.Errorf("install php shim: %w", err)
 	}
+	// Before pvm used bin/ everywhere, the macOS shim lived in shims/; a
+	// stale one first on PATH would keep running the old pvm binary.
+	os.RemoveAll(filepath.Join(h.Path, "shims"))
 
 	localBin := filepath.Join(filepath.Dir(h.Path), ".local", "bin", "php")
 	if fi, err := os.Lstat(localBin); err == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -46,13 +42,9 @@ func (a *Activator) Activate(h *home.Dir, ver, bin string) error {
 	return h.SetCurrent(ver)
 }
 
-// Deactivate leaves no global version and lets update-alternatives pick php.
+// Deactivate leaves no global version. The shim stays: it still serves
+// projects that have a .php-version, and otherwise falls back to the system php.
 func (a *Activator) Deactivate(h *home.Dir) error {
-	cmd := sudo.Command("update-alternatives", "--auto", "php")
-	cmd.Stdout, cmd.Stderr = a.Stdout, a.Stderr
-	if err := cmd.Run(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("update-alternatives --auto php: %w", err)
-	}
 	return h.ClearCurrent()
 }
 
