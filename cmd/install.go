@@ -17,7 +17,7 @@ var InstallCmd = &cobra.Command{
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	return installVersion(newManager(cmd.Context()), args[0], cmd.OutOrStdout())
+	return installVersion(newManager(cmd), args[0], cmd.OutOrStdout())
 }
 
 func installVersion(m *pvm.Manager, arg string, out io.Writer) error {

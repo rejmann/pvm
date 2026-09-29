@@ -23,7 +23,7 @@ func runCurrent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printCurrent(newManager(cmd.Context()), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
+	return printCurrent(newManager(cmd), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
 }
 
 func printCurrent(m *pvm.Manager, dir, env string, out io.Writer) error {

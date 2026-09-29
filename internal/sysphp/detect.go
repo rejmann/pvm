@@ -4,11 +4,9 @@ package sysphp
 import (
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
-	"github.com/rejmann/pvm/internal/system"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -37,11 +35,7 @@ func Detect() []PHP {
 		}
 	}
 
-	phpBin := "php"
-	if runtime.GOOS == system.Windows {
-		phpBin = "php.exe"
-	}
-	if plain, err := exec.LookPath(phpBin); err == nil {
+	if plain, err := exec.LookPath(phpExe); err == nil {
 		if v := queryVersion(plain); v != "" {
 			if _, exists := seen[v]; !exists {
 				seen[v] = plain

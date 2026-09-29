@@ -1,5 +1,3 @@
-//go:build windows
-
 package sysphp
 
 import (
@@ -7,11 +5,9 @@ import (
 	"path/filepath"
 )
 
-func platformGlobs() []string {
-	return windowsGlobs()
-}
+const phpExe = "php.exe"
 
-func windowsGlobs() []string {
+func platformGlobs() []string {
 	globs := []string{
 		`C:\tools\php*\php.exe`,
 		`C:\php*\php.exe`,

@@ -22,7 +22,7 @@ func runWhich(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printWhich(newManager(cmd.Context()), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
+	return printWhich(newManager(cmd), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
 }
 
 func printWhich(m *pvm.Manager, dir, env string, out io.Writer) error {

@@ -17,7 +17,7 @@ var RemoveCmd = &cobra.Command{
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	return removeVersion(newManager(cmd.Context()), args[0], cmd.OutOrStdout(), cmd.ErrOrStderr())
+	return removeVersion(newManager(cmd), args[0], cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
 func removeVersion(m *pvm.Manager, v string, out, errOut io.Writer) error {

@@ -1,6 +1,6 @@
-//go:build linux || darwin
+//go:build !windows
 
-package symlink
+package shim
 
 import (
 	"os"

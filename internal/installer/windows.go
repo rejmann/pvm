@@ -5,6 +5,7 @@ package installer
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,19 @@ import (
 	"github.com/rejmann/pvm/internal/version"
 )
 
-func WindowsInstall(h *home.Dir, ver string) error {
+// System installs the PHP builds from windows.php.net into the pvm home.
+type System struct {
+	Stdout, Stderr io.Writer // progress messages
+}
+
+// New returns the installer for this system.
+func New(stdout, stderr io.Writer) *System {
+	return &System{Stdout: stdout, Stderr: stderr}
+}
+
+// Install downloads and extracts PHP ver, writes its php.ini and records
+// its binary.
+func (s *System) Install(h *home.Dir, ver string) error {
 	branch := version.Branch(ver)
 
 	fullVer, err := resolveFullVersion(ver, branch)
@@ -23,9 +36,9 @@ func WindowsInstall(h *home.Dir, ver string) error {
 	}
 
 	installDir := h.PHPDir(branch)
-	fmt.Printf("Downloading PHP %s to %s...\n", fullVer, installDir)
+	fmt.Fprintf(s.Stdout, "Downloading PHP %s to %s...\n", fullVer, installDir)
 
-	if err := downloadAndExtractPHP(fullVer, installDir); err != nil {
+	if err := downloadAndExtractPHP(fullVer, installDir, s.Stdout); err != nil {
 		return err
 	}
 
@@ -40,7 +53,8 @@ func WindowsInstall(h *home.Dir, ver string) error {
 	return h.SetBinary(ver, binPath)
 }
 
-func WindowsRemove(h *home.Dir, ver string) error {
+// Remove deletes the extracted build of ver.
+func (s *System) Remove(h *home.Dir, ver string) error {
 	branch := version.Branch(ver)
 	installDir := h.PHPDir(branch)
 
@@ -61,7 +75,7 @@ func resolveFullVersion(ver, branch string) (string, error) {
 	return phpnet.LatestPatch(context.Background(), branch)
 }
 
-// WindowsEnsureExtensions enables exts in the php.ini of an installed version.
-func WindowsEnsureExtensions(h *home.Dir, ver string, exts []string) error {
+// AddExtensions enables exts in the php.ini of installed version ver.
+func (s *System) AddExtensions(h *home.Dir, ver string, exts []string) error {
 	return enableIniExtensions(h.PHPDir(version.Branch(ver)), exts)
 }

@@ -5,12 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/pvm"
-	"github.com/rejmann/pvm/internal/system"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +28,7 @@ func runUse(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return useVersion(newManager(cmd.Context()), arg, cmd.OutOrStdout())
+	return useVersion(newManager(cmd), arg, cmd.OutOrStdout())
 }
 
 func useVersion(m *pvm.Manager, arg string, out io.Writer) error {
@@ -71,13 +69,5 @@ func printPathHint(out io.Writer, h *home.Dir) {
 		}
 	}
 
-	switch runtime.GOOS {
-	case system.Windows:
-		fmt.Fprintf(out, "\nOne-time setup: reload your PowerShell profile to activate version switching:\n")
-		fmt.Fprintf(out, "  . $PROFILE\n")
-		fmt.Fprintf(out, "\nAfter that, pvm use will switch versions instantly in any new terminal.\n")
-	default:
-		fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", managed)
-		fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", managed)
-	}
+	printPathSetup(out, managed)
 }

@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/pvm"
-	"github.com/rejmann/pvm/internal/system"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +29,7 @@ func runShim(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	bin, err := shimTarget(newManager(cmd.Context()), dir, os.Getenv(pvm.EnvVersion), os.Getenv("PATH"))
+	bin, err := shimTarget(newManager(cmd), dir, os.Getenv(pvm.EnvVersion), os.Getenv("PATH"))
 	if err != nil {
 		return err
 	}
@@ -57,9 +55,7 @@ func shimTarget(m *pvm.Manager, dir, env, path string) (string, error) {
 
 // lookPathExcluding is exec.LookPath restricted to PATH entries other than skip.
 func lookPathExcluding(name, path, skip string) string {
-	if runtime.GOOS == system.Windows {
-		name += ".exe"
-	}
+	name += exeSuffix
 	skip = filepath.Clean(skip)
 
 	for _, dir := range filepath.SplitList(path) {
@@ -71,7 +67,7 @@ func lookPathExcluding(name, path, skip string) string {
 		if err != nil || fi.IsDir() {
 			continue
 		}
-		if runtime.GOOS != system.Windows && fi.Mode()&0111 == 0 {
+		if !isExecutable(fi) {
 			continue
 		}
 		return p

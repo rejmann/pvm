@@ -1,10 +1,9 @@
-//go:build windows
-
-package symlink
+package shim
 
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,15 +13,24 @@ import (
 	pvmversion "github.com/rejmann/pvm/internal/version"
 )
 
-func SetCurrent(h *home.Dir, version, binaryPath string) error {
-	return setCurrentWindows(h, version, binaryPath)
+// Activator switches the global version with a php.bat shim that reads
+// current-version, and puts the shim directory on the user PATH.
+type Activator struct {
+	Stdout, Stderr io.Writer
 }
 
-func RemoveCurrent(h *home.Dir) error {
+// New returns the activator for this system.
+func New(stdout, stderr io.Writer) *Activator {
+	return &Activator{Stdout: stdout, Stderr: stderr}
+}
+
+// Deactivate is not supported on Windows yet.
+func (a *Activator) Deactivate(*home.Dir) error {
 	return fmt.Errorf("to be implemented: remove current version on Windows (manual PATH cleanup required)")
 }
 
-func setCurrentWindows(h *home.Dir, version, binaryPath string) error {
+// Activate makes version the global one.
+func (a *Activator) Activate(h *home.Dir, version, binaryPath string) error {
 	// prefer the deterministic install dir over whatever is stored in the binary file
 	if p := windowsInstalledBinary(h, version); p != "" {
 		binaryPath = p
@@ -85,7 +93,7 @@ func installPowerShellWrapper(shimDir string) {
 // RemoveIntegration undoes what pvm set up outside its data directory: the
 // shim directory and binDir entries in the user PATH, and the wrapper in the
 // PowerShell profile.
-func RemoveIntegration(h *home.Dir, binDir string) error {
+func (a *Activator) RemoveIntegration(h *home.Dir, binDir string) error {
 	if err := removeFromUserPath(h.ShimDir(), binDir); err != nil {
 		return fmt.Errorf("update user PATH: %w", err)
 	}
@@ -167,10 +175,4 @@ func windowsInstalledBinary(h *home.Dir, version string) string {
 		return p
 	}
 	return ""
-}
-
-// EnsureShim is a no-op on Windows: the php.bat shim is written by SetCurrent
-// and does not yet resolve .php-version files.
-func EnsureShim(h *home.Dir) error {
-	return nil
 }

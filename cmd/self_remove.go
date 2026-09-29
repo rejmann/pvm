@@ -7,14 +7,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/selfupdate"
-	"github.com/rejmann/pvm/internal/symlink"
-	"github.com/rejmann/pvm/internal/system"
+	"github.com/rejmann/pvm/internal/shim"
 	"github.com/spf13/cobra"
 )
 
@@ -65,8 +63,8 @@ func runSelfRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	ops := selfRemoveOps{
-		removeVersion:     installer.Remove,
-		removeIntegration: symlink.RemoveIntegration,
+		removeVersion:     installer.New(cmd.OutOrStdout(), cmd.ErrOrStderr()).Remove,
+		removeIntegration: shim.New(cmd.OutOrStdout(), cmd.ErrOrStderr()).RemoveIntegration,
 		removeBinary:      selfupdate.RemoveBinary,
 	}
 	return selfRemove(home.Default(), exe, withPHP, yes, ops,
@@ -83,7 +81,7 @@ func selfRemove(h *home.Dir, exe string, withPHP, yes bool, ops selfRemoveOps, i
 		return fmt.Errorf("list installed versions: %w", err)
 	}
 	// on Windows the PHP builds live in the data directory and go with it
-	phpGoes := withPHP || runtime.GOOS == system.Windows
+	phpGoes := withPHP || phpInHome
 
 	fmt.Fprintln(out, "This will remove:")
 	fmt.Fprintf(out, "  %s\n", exe)
@@ -120,20 +118,13 @@ func selfRemove(h *home.Dir, exe string, withPHP, yes bool, ops selfRemoveOps, i
 
 	if err := ops.removeBinary(exe); err != nil {
 		if errors.Is(err, selfupdate.ErrPermission) {
-			if runtime.GOOS == system.Windows {
-				return fmt.Errorf("%w — delete %s from a terminal opened as Administrator", err, exe)
-			}
-			return fmt.Errorf("%w — finish with: sudo rm %s", err, exe)
+			return fmt.Errorf("%w — %s", err, removeBinaryHint(exe))
 		}
 		return err
 	}
 
 	fmt.Fprintln(out, "pvm removed.")
-	if runtime.GOOS == system.Windows {
-		fmt.Fprintln(out, "Open a new terminal to pick up the updated PATH.")
-	} else {
-		fmt.Fprintf(out, "If your shell config adds %s to PATH, remove that line.\n", h.ShimDir())
-	}
+	printAfterRemoval(out, h.ShimDir())
 	return nil
 }
 

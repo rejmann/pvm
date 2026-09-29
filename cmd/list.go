@@ -17,7 +17,7 @@ var ListCmd = &cobra.Command{
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	return listVersions(newManager(cmd.Context()), cmd.OutOrStdout())
+	return listVersions(newManager(cmd), cmd.OutOrStdout())
 }
 
 func listVersions(m *pvm.Manager, out io.Writer) error {

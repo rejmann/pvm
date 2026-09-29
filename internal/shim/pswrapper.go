@@ -1,4 +1,4 @@
-package symlink
+package shim
 
 import (
 	"fmt"

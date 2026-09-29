@@ -7,11 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/rejmann/pvm/internal/selfupdate"
-	"github.com/rejmann/pvm/internal/system"
 	"github.com/spf13/cobra"
 )
 
@@ -90,10 +88,7 @@ func selfUpgrade(ctx context.Context, u *selfupdate.Updater, exe, current, tag s
 
 	if err := selfupdate.Replace(exe, bin); err != nil {
 		if errors.Is(err, selfupdate.ErrPermission) {
-			if runtime.GOOS == system.Windows {
-				return fmt.Errorf("%w — re-run pvm self-upgrade from a terminal opened as Administrator", err)
-			}
-			return fmt.Errorf("%w — re-run with: sudo pvm self-upgrade", err)
+			return fmt.Errorf("%w — %s", err, elevatedHint("pvm self-upgrade"))
 		}
 		return err
 	}

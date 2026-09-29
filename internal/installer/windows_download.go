@@ -12,10 +12,10 @@ import (
 	"strings"
 )
 
-func downloadAndExtractPHP(ver, destDir string) error {
+func downloadAndExtractPHP(ver, destDir string, out io.Writer) error {
 	var lastErr error
 	for _, url := range candidateURLs(ver) {
-		fmt.Printf("Trying %s\n", url)
+		fmt.Fprintf(out, "Trying %s\n", url)
 		if err := downloadExtract(url, destDir); err != nil {
 			lastErr = err
 			continue

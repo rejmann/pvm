@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rejmann/pvm/internal/installer"
-
 	"github.com/rejmann/pvm/internal/home"
 )
 
@@ -52,11 +50,12 @@ func TestHasArchiveTool(t *testing.T) {
 
 func TestOfferExtensions(t *testing.T) {
 	var got []string
+	saved := installExtensions
 	installExtensions = func(_ *home.Dir, _ string, exts []string) error {
 		got = append(got, exts...)
 		return nil
 	}
-	t.Cleanup(func() { installExtensions = installer.EnsureExtensions })
+	t.Cleanup(func() { installExtensions = saved })
 
 	t.Run("not a terminal", func(t *testing.T) {
 		var out bytes.Buffer

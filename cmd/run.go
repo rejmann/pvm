@@ -54,7 +54,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	a, err := newManager(cmd.Context()).Select(versionArg, dir, os.Getenv(pvm.EnvVersion))
+	a, err := newManager(cmd).Select(versionArg, dir, os.Getenv(pvm.EnvVersion))
 	if errors.Is(err, pvm.ErrNoActiveVersion) {
 		return fmt.Errorf("%w — pass one (pvm run 8.3 ...) or run: pvm use <version>", err)
 	}

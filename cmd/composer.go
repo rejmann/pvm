@@ -57,7 +57,7 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	m := newManager(cmd.Context())
+	m := newManager(cmd)
 	h := m.Home
 
 	a, err := m.Active(dir, os.Getenv(pvm.EnvVersion))
@@ -188,8 +188,10 @@ func offerExtensions(h *home.Dir, version string, exts []string, why string, int
 	return true
 }
 
-// installExtensions is installer.EnsureExtensions; tests replace it.
-var installExtensions = installer.EnsureExtensions
+// installExtensions installs PHP extensions; tests replace it.
+var installExtensions = func(h *home.Dir, ver string, exts []string) error {
+	return installer.New(os.Stdout, os.Stderr).AddExtensions(h, ver, exts)
+}
 
 // missingExtRe matches Composer's platform errors, e.g.
 // "symfony/framework-bundle[v8.1.0, ..., v8.1.7] require ext-xml * -> it is missing from your system."
