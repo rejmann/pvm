@@ -3,11 +3,8 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/cmd/use"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
@@ -26,7 +23,7 @@ Without arguments, uses the version from the nearest .php-version file.`,
 }
 
 func runUse(cmd *cobra.Command, args []string) error {
-	arg, err := useArg(args, ".", cmd.OutOrStdout())
+	arg, err := use.Arg(args, ".", cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
@@ -43,33 +40,6 @@ func useVersion(m *pvm.Manager, arg string, out io.Writer) error {
 	}
 
 	fmt.Fprintf(out, "Now using PHP %s.\n", t)
-	printPathHint(out, m.Home)
+	use.PrintPathHint(out, m.Home)
 	return nil
-}
-
-// useArg returns the version to switch to: the explicit argument, or the one
-// declared in the nearest .php-version when none is given.
-func useArg(args []string, dir string, out io.Writer) (string, error) {
-	if len(args) > 0 {
-		return args[0], nil
-	}
-
-	v, path, err := pvm.ProjectVersion(dir)
-	if err != nil {
-		return "", err
-	}
-	fmt.Fprintf(out, "Found %s with version %s.\n", path, v)
-	return v, nil
-}
-
-func printPathHint(out io.Writer, h *home.Dir) {
-	managed := h.ShimDir()
-
-	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
-		if strings.EqualFold(p, managed) {
-			return
-		}
-	}
-
-	printPathSetup(out, managed)
 }

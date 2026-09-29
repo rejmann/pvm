@@ -1,4 +1,4 @@
-package cmd
+package run
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSplitRunArgs(t *testing.T) {
+func TestSplitArgs(t *testing.T) {
 	tests := []struct {
 		in          []string
 		wantVersion string
@@ -39,26 +39,28 @@ func TestSplitRunArgs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		v, rest, err := splitRunArgs(tt.in)
+		v, rest, err := SplitArgs(tt.in)
 		if tt.wantErr != "" {
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("splitRunArgs(%q) error = %v, want %q", tt.in, err, tt.wantErr)
+				t.Errorf("SplitArgs(%q) error = %v, want %q", tt.in, err, tt.wantErr)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("splitRunArgs(%q) unexpected error: %v", tt.in, err)
+			t.Errorf("SplitArgs(%q) unexpected error: %v", tt.in, err)
 			continue
 		}
 		if v != tt.wantVersion || !reflect.DeepEqual(rest, tt.wantRest) {
-			t.Errorf("splitRunArgs(%q) = (%q, %q), want (%q, %q)", tt.in, v, rest, tt.wantVersion, tt.wantRest)
+			t.Errorf("SplitArgs(%q) = (%q, %q), want (%q, %q)", tt.in, v, rest, tt.wantVersion, tt.wantRest)
 		}
 	}
 }
 
-func TestCheckRunFile(t *testing.T) {
+func TestCheckFile(t *testing.T) {
 	dir := t.TempDir()
-	mkdirAll(t, filepath.Join(dir, "src"))
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "script.php"), []byte("<?php"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +85,7 @@ func TestCheckRunFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkRunFile(tt.rest, dir)
+			err := CheckFile(tt.rest, dir)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)

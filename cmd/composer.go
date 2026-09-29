@@ -3,13 +3,13 @@ package cmd
 import (
 	"os"
 
+	composercli "github.com/rejmann/pvm/cmd/composer"
 	"github.com/rejmann/pvm/internal/composer"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/rejmann/pvm/internal/sysphp"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func newComposerCmd() *cobra.Command {
@@ -58,14 +58,14 @@ func runComposer(cmd *cobra.Command, args []string) error {
 		Probe:      sysphp.Probe,
 		Exec:       process.Run,
 		Getenv:     os.Getenv,
-		CanUnzip:   canUnzip(os.Getenv("PATH")),
+		CanUnzip:   composercli.CanUnzip(os.Getenv("PATH")),
 		Notices:    cmd.ErrOrStderr(),
 	}
-	if isTerminal(os.Stdin) {
+	if composercli.IsTerminal(os.Stdin) {
 		c.Confirm = func(prompt string) bool { return confirm(os.Stdin, cmd.ErrOrStderr(), prompt) }
 	}
 
-	if forceANSI(args, isTerminal(os.Stdout), os.Getenv("NO_COLOR")) {
+	if composercli.ForceANSI(args, composercli.IsTerminal(os.Stdout), os.Getenv("NO_COLOR")) {
 		args = append([]string{"--ansi"}, args...)
 	}
 	code, err := c.Run(cmd.Context(), dir, args)
@@ -74,39 +74,4 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	}
 	os.Exit(code)
 	return nil
-}
-
-// canUnzip reports whether Composer can extract zips without the PHP
-// extension: it also accepts unzip or 7-Zip on PATH.
-func canUnzip(path string) bool {
-	for _, name := range []string{"unzip", "7z", "7zz"} {
-		if process.LookPath(name, path, "") != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// forceANSI reports whether to pass --ansi: Composer's stderr goes through
-// pvm (to spot missing extensions), so Composer would otherwise turn colors
-// off even in a terminal.
-func forceANSI(args []string, stdoutTerminal bool, noColor string) bool {
-	if !stdoutTerminal || noColor != "" {
-		return false
-	}
-	for _, a := range args {
-		if a == "--" {
-			break
-		}
-		if a == "--ansi" || a == "--no-ansi" {
-			return false
-		}
-	}
-	return true
-}
-
-// isTerminal is false for pipes and redirects, including </dev/null (a char
-// device, so a mode check alone is not enough).
-func isTerminal(f *os.File) bool {
-	return term.IsTerminal(int(f.Fd()))
 }

@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
+	"github.com/rejmann/pvm/cmd/run"
 	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/pvm"
-	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -49,11 +47,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	versionArg, rest, err := splitRunArgs(args)
+	versionArg, rest, err := run.SplitArgs(args)
 	if err != nil {
 		return err
 	}
-	if err := checkRunFile(rest, dir); err != nil {
+	if err := run.CheckFile(rest, dir); err != nil {
 		return err
 	}
 
@@ -69,89 +67,4 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return process.Exec(a.Binary, rest)
-}
-
-// splitRunArgs separates the optional version from the php arguments. The
-// version comes from -v/--version anywhere before a "--", or positionally from
-// a first argument that parses as a version or alias ("lts"). Everything after
-// "--" goes to the script untouched.
-func splitRunArgs(args []string) (versionArg string, rest []string, err error) {
-	set := func(v string) error {
-		if versionArg != "" {
-			return fmt.Errorf("version given twice (%s and %s)", versionArg, v)
-		}
-		versionArg = v
-		return nil
-	}
-
-	var passthrough []string
-scan:
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--":
-			passthrough = args[i+1:]
-			break scan
-		case a == "-v" || a == "--version":
-			if i+1 >= len(args) {
-				return "", nil, fmt.Errorf("flag %s needs a version", a)
-			}
-			if err := set(args[i+1]); err != nil {
-				return "", nil, err
-			}
-			i++
-		case strings.HasPrefix(a, "--version="):
-			if err := set(strings.TrimPrefix(a, "--version=")); err != nil {
-				return "", nil, err
-			}
-		default:
-			rest = append(rest, a)
-		}
-	}
-
-	if len(rest) > 0 && looksLikeVersion(rest[0]) {
-		if err := set(rest[0]); err != nil {
-			return "", nil, err
-		}
-		rest = rest[1:]
-	}
-	return versionArg, append(rest, passthrough...), nil
-}
-
-func looksLikeVersion(s string) bool {
-	_, err := version.Parse(s)
-	return err == nil || version.IsAlias(s)
-}
-
-var ErrNoRunFile = errors.New("no PHP file given — usage: pvm run [-v version | version] <file> [args...]")
-
-// checkRunFile makes sure the php arguments start with an existing file,
-// given directly or with -f/--file, so run only ever runs a script.
-func checkRunFile(rest []string, dir string) error {
-	if len(rest) == 0 {
-		return ErrNoRunFile
-	}
-
-	file := rest[0]
-	if file == "-f" || file == "--file" {
-		if len(rest) < 2 {
-			return ErrNoRunFile
-		}
-		file = rest[1]
-	} else if strings.HasPrefix(file, "-") {
-		return ErrNoRunFile
-	}
-
-	path := file
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(dir, path)
-	}
-	fi, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("PHP file %s not found", file)
-	}
-	if fi.IsDir() {
-		return fmt.Errorf("%s is a directory, not a PHP file", file)
-	}
-	return nil
 }

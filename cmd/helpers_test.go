@@ -3,7 +3,6 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/rejmann/pvm/internal/home"
@@ -51,24 +50,4 @@ func fakeInstall(t *testing.T, h *home.Dir, v string) {
 	if err := h.SetBinary(v, bin); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func mkdirAll(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func fakeExecutable(t *testing.T, dir, name string) string {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	mkdirAll(t, dir)
-	p := filepath.Join(dir, name)
-	if err := os.WriteFile(p, nil, 0755); err != nil {
-		t.Fatal(err)
-	}
-	return p
 }

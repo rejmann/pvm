@@ -1,6 +1,6 @@
 //go:build !windows
 
-package cmd
+package selfremove
 
 import (
 	"fmt"
@@ -9,17 +9,6 @@ import (
 
 // phpInHome is true when the PHP builds live in the pvm home and so go with it.
 const phpInHome = false
-
-// printPathSetup tells how to put the shim directory on PATH.
-func printPathSetup(out io.Writer, shimDir string) {
-	fmt.Fprintf(out, "\nHint: add %s to your PATH to use this version:\n", shimDir)
-	fmt.Fprintf(out, "  export PATH=\"%s:$PATH\"\n", shimDir)
-}
-
-// elevatedHint tells how to re-run command with the rights it lacked.
-func elevatedHint(command string) string {
-	return "re-run with: sudo " + command
-}
 
 // removeBinaryHint tells how to delete a binary pvm could not remove.
 func removeBinaryHint(exe string) string {

@@ -118,6 +118,7 @@ func newYourCmd() *cobra.Command {
 
 2. Register it in `NewRootCmd` in `cmd/root.go`.
 3. Put the rule itself in `internal/pvm` (with a test using the fakes) and keep only argument parsing and output in the command.
+4. Helpers used only by this command go in `cmd/<name>/` (package `<name>`, e.g. `cmd/run/` for `run.go`), with their tests; `cmd/` itself keeps only command files. If a helper is needed by several commands, discuss where it belongs first.
 
 ## Adding a new installer backend
 

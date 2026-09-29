@@ -9,6 +9,7 @@ The layout follows common Go conventions rather than named layers:
 - **`main.go` at the root, Cobra commands in `cmd/`** (the cobra-cli layout), so `go install github.com/rejmann/pvm@latest` keeps working.
 - **Packages in `internal/` are named for what they provide** (`home`, `installer`, `shim`, `phpnet`…), not for a layer.
 - **Commands are thin.** A command parses its arguments, calls a use case in `internal/pvm` and prints the result. It holds no rules.
+- **`cmd/` holds only command files.** Helpers used by a single command live in a package named after it (`cmd/run/` for `run.go`); only what several commands share (`manager.go`, `lts_resolver.go`) stays next to them.
 - **Interfaces live with the consumer.** `internal/pvm` declares the small interfaces it needs (`Installer`, `Activator`, `ExtensionInstaller`, `ComposerSource`), and the packages that talk to the system return concrete types that happen to satisfy them ("accept interfaces, return structs").
 - **One place per concern.** Only `internal/home` builds paths inside the pvm home. Only `internal/process` runs the programs pvm hands over to (php, Composer). Only the `_linux.go` / `_darwin.go` / `_windows.go` files know which OS they run on: there is no `switch runtime.GOOS`.
 
@@ -17,13 +18,17 @@ The layout follows common Go conventions rather than named layers:
 ```
 pvm/
 ├── main.go                     # builds the root command with the build version and runs it
-├── cmd/                        # Cobra commands: arguments in, messages out
+├── cmd/                        # Cobra commands: one file per command
 │   ├── root.go                 # NewRootCmd(version): the command tree, no globals
-│   ├── manager.go              # newManager(): wires internal/pvm to this system
 │   ├── available.go  install.go  list.go  use.go  remove.go
 │   ├── current.go  which.go  run.go  shim.go  composer.go
-│   ├── self_upgrade.go  self_remove.go  lts_resolver.go
-│   └── os_unix.go / os_windows.go   # PATH setup and permission hints per OS
+│   ├── self_upgrade.go  self_remove.go
+│   ├── manager.go  lts_resolver.go  # shared by several commands: newManager()
+│   ├── run/                    # helpers of run.go: SplitArgs, CheckFile
+│   ├── use/                    # helpers of use.go: Arg, PrintPathHint (per OS)
+│   ├── composer/               # helpers of composer.go: ForceANSI, CanUnzip, IsTerminal
+│   ├── selfupgrade/            # logic of self_upgrade.go + permission hint per OS
+│   └── selfremove/             # logic of self_remove.go + per-OS messages
 └── internal/
     ├── pvm/                    # use cases, independent of the command line
     │   ├── pvm.go              # Manager + the Installer and Activator interfaces

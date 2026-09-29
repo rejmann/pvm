@@ -1,4 +1,4 @@
-package cmd
+package selfupgrade
 
 import (
 	"archive/tar"
@@ -64,7 +64,7 @@ func fakeExe(t *testing.T) string {
 	return exe
 }
 
-func TestSelfUpgrade(t *testing.T) {
+func TestRun(t *testing.T) {
 	tests := []struct {
 		name    string
 		current string
@@ -87,7 +87,7 @@ func TestSelfUpgrade(t *testing.T) {
 			exe := fakeExe(t)
 			var out bytes.Buffer
 
-			if err := selfUpgrade(context.Background(), u, exe, tt.current, tt.tag, tt.check, &out); err != nil {
+			if err := Run(context.Background(), u, exe, tt.current, tt.tag, tt.check, &out); err != nil {
 				t.Fatal(err)
 			}
 
@@ -102,11 +102,11 @@ func TestSelfUpgrade(t *testing.T) {
 	}
 }
 
-func TestSelfUpgradeUnknownTag(t *testing.T) {
+func TestRunUnknownTag(t *testing.T) {
 	u := newReleaseServer(t, "v1.2.0", "v1.2.0")
 	exe := fakeExe(t)
 
-	err := selfUpgrade(context.Background(), u, exe, "v1.2.0", "v9.9.9", false, &bytes.Buffer{})
+	err := Run(context.Background(), u, exe, "v1.2.0", "v9.9.9", false, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "has no build for linux/amd64") {
 		t.Fatalf("error = %v, want missing build", err)
 	}
