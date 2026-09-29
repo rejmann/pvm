@@ -18,6 +18,26 @@ func TestPowerShellWrapperAvoidsPS7OnlySyntax(t *testing.T) {
 	}
 }
 
+func TestIsGoBuildBinary(t *testing.T) {
+	tests := []struct {
+		exe  string
+		want bool
+	}{
+		{`C:\Users\me\AppData\Local\go-build\ca\ca8f-d\pvm.exe`, true},
+		{`C:\Users\me\AppData\Local\Temp\go-build123456\b001\exe\pvm.exe`, true},
+		{"/tmp/go-build987/b001/exe/pvm", true},
+		{`C:\Users\me\AppData\Local\Programs\pvm\pvm.exe`, false},
+		{`C:\tools\go-builder\pvm.exe`, false},
+		{"/usr/local/bin/pvm", false},
+	}
+
+	for _, tt := range tests {
+		if got := isGoBuildBinary(tt.exe); got != tt.want {
+			t.Errorf("isGoBuildBinary(%q) = %v, want %v", tt.exe, got, tt.want)
+		}
+	}
+}
+
 func TestRemovePowerShellWrapper(t *testing.T) {
 	tests := []struct {
 		name        string

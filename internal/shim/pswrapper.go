@@ -82,6 +82,21 @@ func findPowerShellWrapper(profile string) (start, end int, ok bool) {
 	return start, end, true
 }
 
+// isGoBuildBinary reports whether exe was built by `go run` (or `go test`)
+// into the Go build cache or a temp go-build dir. Such binaries are transient
+// and unsigned — Smart App Control blocks them — so the wrapper must not
+// point at them.
+func isGoBuildBinary(exe string) bool {
+	for _, elem := range strings.FieldsFunc(exe, func(r rune) bool { return r == '/' || r == '\\' }) {
+		// GOCACHE is ".../go-build"; temp dirs are "go-build" plus digits
+		rest, ok := strings.CutPrefix(elem, "go-build")
+		if ok && strings.Trim(rest, "0123456789") == "" {
+			return true
+		}
+	}
+	return false
+}
+
 // psSingleQuote escapes s for use inside a single-quoted PowerShell string.
 func psSingleQuote(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
