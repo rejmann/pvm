@@ -31,6 +31,9 @@ func WindowsInstall(base, ver string) error {
 	if _, err := os.Stat(binPath); err != nil {
 		return fmt.Errorf("php.exe not found at %s after extraction", binPath)
 	}
+	if err := writePHPIni(installDir); err != nil {
+		return fmt.Errorf("write php.ini: %w", err)
+	}
 
 	verDir := filepath.Join(base, "versions", ver)
 	if err := os.MkdirAll(verDir, 0755); err != nil {
@@ -65,4 +68,9 @@ func resolveFullVersion(ver, branch string) (string, error) {
 // e.g. %LOCALAPPDATA%\pvm\php\8.3
 func phpInstallDir(base, branch string) string {
 	return filepath.Join(base, "php", branch)
+}
+
+// WindowsEnsureExtensions enables exts in the php.ini of an installed version.
+func WindowsEnsureExtensions(base, ver string, exts []string) error {
+	return enableIniExtensions(phpInstallDir(base, majorMinor(ver)), exts)
 }

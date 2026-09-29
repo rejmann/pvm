@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -26,13 +27,17 @@ type pkgManagerDef struct {
 	installArgs func(pkg string) []string
 	removeArgs  func(pkg string) []string
 	preInstall  func(branch string) error
+	// extPkg names the package that provides a (normalized) PHP extension;
+	// nil when pvm cannot install extensions with this package manager.
+	extPkg func(branch, ext string) string
 }
 
 var packageManagers = []pkgManagerDef{
 	{
-		bin:    pmApt,
-		phpPkg: func(branch string) string { return "php" + branch + "-cli" },
-		phpBin: func(branch string) string { return phpBinDir + branch },
+		bin:       pmApt,
+		phpPkg:    func(branch string) string { return "php" + branch + "-cli" },
+		extPkg:    func(branch, ext string) string { return "php" + branch + "-" + ext },
+		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmApt, "install", "-y", pkg}
 		},
@@ -56,9 +61,10 @@ var packageManagers = []pkgManagerDef{
 		},
 	},
 	{
-		bin:    pmDnf,
-		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
-		phpBin: func(branch string) string { return phpBinDir + branch },
+		bin:       pmDnf,
+		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
+		extPkg:    remiExtPkg,
+		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmDnf, "install", "-y", pkg}
 		},
@@ -78,9 +84,10 @@ var packageManagers = []pkgManagerDef{
 		},
 	},
 	{
-		bin:    pmYum,
-		phpPkg: func(branch string) string { return "php" + branch + "-php-cli" },
-		phpBin: func(branch string) string { return phpBinDir + branch },
+		bin:       pmYum,
+		phpPkg:    func(branch string) string { return "php" + branch + "-php-cli" },
+		extPkg:    remiExtPkg,
+		phpBin:    func(branch string) string { return phpBinDir + branch },
 		installArgs: func(pkg string) []string {
 			return []string{pmYum, "install", "-y", pkg}
 		},
@@ -159,6 +166,13 @@ func LinuxInstall(base, ver string) error {
 		return fmt.Errorf("install PHP %s via %s: %w", ver, pm.bin, err)
 	}
 
+	// pacman/zypper have no extPkg: pvm does not manage their extensions.
+	if pm.extPkg != nil {
+		if err := installExtensions(pm, base, ver, BaseExtensions); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v. PHP works; pvm composer offers to install missing extensions when a project needs them.\n", err)
+		}
+	}
+
 	binPath := pm.phpBin(branch)
 	if _, err := os.Stat(binPath); err != nil {
 		return fmt.Errorf("PHP binary not found at %s after installation", binPath)
@@ -181,10 +195,80 @@ func LinuxRemove(base, ver string) error {
 	branch := majorMinor(ver)
 	pkg := pm.phpPkg(branch)
 
+	// Extensions first, and quietly: some may never have been installed. The
+	// base ones are always included, for versions installed before pvm
+	// recorded its packages.
+	extras := readPackages(base, ver)
+	if pm.extPkg != nil {
+		for _, ext := range BaseExtensions {
+			extras = append(extras, pm.extPkg(branch, ext))
+		}
+	}
+	for _, extra := range extras {
+		exec.Command("sudo", pm.removeArgs(extra)...).Run()
+	}
+
 	cmd := exec.Command("sudo", pm.removeArgs(pkg)...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("remove PHP %s via %s: %w", ver, pm.bin, err)
 	}
 	return nil
+}
+
+// remiExtPkg names Remi's package for ext; PECL extensions carry a pecl- prefix.
+func remiExtPkg(branch, ext string) string {
+	switch ext {
+	case "mysql":
+		ext = "mysqlnd"
+	case "sqlite3":
+		ext = "pdo"
+	case "zip", "redis", "xdebug", "imagick", "apcu", "memcached", "igbinary", "mongodb":
+		ext = "pecl-" + ext
+	}
+	return "php" + branch + "-php-" + ext
+}
+
+// installExtensions installs the packages of exts one by one and records the
+// ones that succeed, so LinuxRemove removes them with the version.
+func installExtensions(pm *pkgManagerDef, base, ver string, exts []string) error {
+	if pm.extPkg == nil {
+		return fmt.Errorf("pvm cannot install PHP extensions with %s", pm.bin)
+	}
+	branch := majorMinor(ver)
+
+	var installed, failed []string
+	seen := map[string]bool{}
+	for _, ext := range exts {
+		pkg := pm.extPkg(branch, normalizeExtension(ext))
+		if seen[pkg] {
+			continue
+		}
+		seen[pkg] = true
+
+		cmd := exec.Command("sudo", pm.installArgs(pkg)...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			failed = append(failed, pkg)
+			continue
+		}
+		installed = append(installed, pkg)
+	}
+
+	if err := recordPackages(base, ver, installed); err != nil {
+		return fmt.Errorf("record installed extensions: %w", err)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("could not install %s via %s", strings.Join(failed, ", "), pm.bin)
+	}
+	return nil
+}
+
+// LinuxEnsureExtensions installs the packages of exts for an installed version.
+func LinuxEnsureExtensions(base, ver string, exts []string) error {
+	pm := detectPackageManager()
+	if pm == nil {
+		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
+	}
+	return installExtensions(pm, base, ver, exts)
 }

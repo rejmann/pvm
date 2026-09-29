@@ -26,3 +26,14 @@ func Remove(base, ver string) error {
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
+
+// EnsureExtensions enables the PHP extensions exts (e.g. "zip", "ext-xml")
+// for an installed version, in the php.ini pvm manages.
+func EnsureExtensions(base, ver string, exts []string) error {
+	switch runtime.GOOS {
+	case system.Windows:
+		return WindowsEnsureExtensions(base, ver, exts)
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}

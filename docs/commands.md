@@ -64,10 +64,11 @@ pvm install 8.3.30    # installs a specific patch version
 
 1. Resolves `lts` alias to the highest supported branch name.
 2. Validates the version string format.
-3. Skips installation if the version is already installed.
+3. Fails with `<version> already installed` if it is.
 4. Runs the OS-appropriate installer (see below).
 5. Writes the resolved binary path to `<pvm-home>/versions/<ver>/binary`.
-6. Prints a PATH hint if the pvm shim directory is not yet in `$PATH`.
+
+Installing does not activate the version — run `pvm use`, add a `.php-version`, or use `pvm run`. See [flow.md](flow.md) for how the commands fit together.
 
 ### OS backends
 
@@ -75,13 +76,24 @@ pvm detects the available package manager automatically on Linux.
 
 | OS / Distro | Backend | Notes |
 |-------------|---------|-------|
-| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
-| Linux (Fedora) | `dnf install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
-| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (Debian/Ubuntu) | `apt-get install php<X.Y>-cli` + base extensions | Adds [ondrej/php PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php) automatically if the package is not found |
+| Linux (Fedora) | `dnf install php<X.Y>-php-cli` + base extensions | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
+| Linux (RHEL/CentOS) | `yum install php<X.Y>-php-cli` + base extensions | Adds [Remi repo](https://rpms.remirepo.net) automatically if the package is not found |
 | Linux (Arch) | `pacman -S php` | Only the version in the official repos; no extra repo added |
 | Linux (openSUSE) | `zypper install php<X.Y>` | — |
 | macOS | `brew install php@<X.Y>` | Requires [Homebrew](https://brew.sh) |
-| Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | No external dependency |
+| Windows | Downloads zip from `windows.php.net` and extracts to `%LOCALAPPDATA%\pvm\php\<branch>\` | Writes a `php.ini` (see below) |
+
+### Extensions for Composer
+
+`pvm install` makes sure the PHP it installs has what [`pvm composer`](#pvm-composer-args) and most projects need — the **base extensions** `zip` (extract packages without `unzip`/`7z`), `xml`, `mbstring` and `curl`, plus `openssl` for HTTPS:
+
+- **apt / dnf / yum** — the `-cli` package leaves them out, so pvm installs one package per extension right after PHP (`php<X.Y>-xml`; Remi: `php<X.Y>-php-xml`, `php<X.Y>-php-pecl-zip`). It is best effort: if a package is missing, PHP is still installed and a warning says so. The packages pvm installs are listed in `versions/<X.Y>/packages`, and `pvm remove` removes them with PHP.
+- **Homebrew** — `php@X.Y` already includes them.
+- **pacman / zypper** — the packages are left as they are.
+- **Windows** — the zip from windows.php.net ships no `php.ini`, so no extension loads. pvm writes `php.ini` from the bundled `php.ini-production`, adding an absolute `extension_dir` and `extension=php_<ext>.dll` for `openssl`, `zip`, `mbstring` and `curl` (each only if its DLL is in `ext\`; `xml` is compiled in). An existing `php.ini` is never overwritten; later extensions are appended to it.
+
+Any other extension a project needs (`intl`, `gd`, `pdo_pgsql`...) is installed on demand by `pvm composer` — see [below](#pvm-composer-args).
 
 ### Windows install directory
 
@@ -184,7 +196,7 @@ Arguments:
 
 1. Validates the version string format.
 2. Fails if the version is not installed.
-3. Removes the version files/directory.
+3. Removes the version files/directory, and that version's Composer (`<pvm-home>/composer/php/<version>/`, see [`pvm composer`](#pvm-composer-args)).
 4. If the removed version was active, clears `current-version` and prints a warning:
    ```
    Warning: PHP 8.3 was the active version. No version is now active.
@@ -271,6 +283,71 @@ pvm run script.php       # version in use in this directory
 2. Resolves the version like `pvm use` (alias, branch → installed patch), or — without one — like the `php` shim; fails if it is not installed.
 3. Sets `PVM_VERSION=<version>` for the new process, so anything it starts that calls `php` through the pvm shim (Composer, `#!/usr/bin/env php` scripts, `shell_exec("php ...")`) uses the same version.
 4. Replaces itself with the php binary (Windows: runs it as a child), so stdin, stdout, signals and the exit code are php's own.
+
+---
+
+## `pvm composer [args...]`
+
+Runs Composer with the pvm-managed PHP version in use in the current directory. Nothing is installed or configured globally — no `composer` on `PATH`, no shell exports. Each PHP version gets its own Composer, downloaded the first time it is needed and kept in the pvm home, so nothing done with one version's Composer can break another.
+
+```
+pvm composer [args...]
+
+Arguments:
+  args    Passed to Composer unchanged — every Composer command and flag works,
+          including -h/--help, -V and --
+```
+
+### Examples
+
+```sh
+pvm composer install
+pvm composer require monolog/monolog
+pvm composer -V
+pvm composer self-update
+PVM_VERSION=8.2 pvm composer update   # a different installed version for one call
+```
+
+### What it does
+
+1. Picks the PHP version like the `php` shim: `PVM_VERSION` → nearest `.php-version` → global. Unlike the shim, it never falls back to a system `php` pvm does not manage: with nothing selected it fails with `no PHP version selected — run: pvm use <version>`.
+2. Asks that php binary for its exact version (pvm may only know the branch, and Composer's minimum is a patch such as 7.2.5) and whether the `zip` extension is loaded.
+
+3. If `zip` is not loaded and neither `unzip` nor `7z` is on `PATH`, Composer could not extract packages, so pvm says so. In a terminal it asks `Install it now? [y/N]` and, on yes, installs the extension for that version the same way `pvm install` does (apt/dnf/yum package; Windows: writes `php.ini`). Either way Composer then runs — `-V`, `validate` or `show` do not need `zip`. Without a terminal (CI, pipes) it only prints the notice.
+4. If this PHP version has no `composer.phar` yet:
+   - reads [getcomposer.org/versions](https://getcomposer.org/versions) and picks the newest stable release whose minimum PHP the exact version meets — the same rule `composer self-update` follows. Today that is 2.10.x for PHP 7.2.5+ and the 2.2 LTS for PHP 5.3–7.2.4; when Composer raises its minimum, pvm follows without an update;
+   - downloads `getcomposer.org/download/<version>/composer.phar` and verifies its RSA-SHA384 signature (`.sig`) with Composer's release key, embedded in pvm — a corrupted or tampered file is rejected and nothing is saved;
+   - saves it atomically and writes Composer's public keys into the version's Composer home, where `self-update` and `diagnose` expect them.
+
+   `Downloading Composer 2.10.3 for PHP 8.3...` goes to stderr, so stdout stays Composer's own. An existing phar is never replaced by pvm: updating it is `pvm composer self-update`'s job.
+5. Sets, for the Composer process only:
+   - `PVM_VERSION=<version>`, so scripts Composer runs that call `php` use the same version;
+   - `COMPOSER_HOME=<pvm-home>/composer/php/<version>/home` and `COMPOSER_CACHE_DIR=<pvm-home>/composer/cache`, instead of `~/.config/composer` and `~/.cache/composer`. If you already set either variable, yours is kept.
+6. Runs `php composer.phar args...` as a child process: stdin, stdout and the exit code are Composer's, Ctrl+C reaches Composer directly and other termination signals are forwarded. Composer's stderr is shown as usual and also read by pvm (in a terminal pvm adds `--ansi`, since Composer would otherwise turn colors off for a piped stderr; `--no-ansi` or `NO_COLOR` turn that off).
+7. If Composer reports extensions missing from the system (`requires ext-xml * -> it is missing from your system`), pvm names them and, in a terminal, asks `Install now? [y/N]`. On yes it installs them for that version (apt/dnf/yum package, recorded in `versions/<X.Y>/packages`; Windows: `extension=` line in `php.ini`; aliases such as `ext-dom` → `xml` or `ext-pdo_mysql` → `mysql` are resolved) and runs the same command again. This does not depend on Composer's exit code: after `create-project`, Symfony Flex reports a failed update and still exits 0. For `create-project`, the directory Composer reported (`Created project in ...`) is emptied first — Composer only creates projects in a new or empty directory, so this restores the starting point and the project's scripts and recipes run again. Without a terminal (CI, pipes) pvm only prints the notice.
+
+### One Composer per PHP version
+
+```
+<pvm-home>/composer/
+├── cache/                      shared download cache (packages don't depend on PHP)
+└── php/
+    ├── 8.3/
+    │   ├── composer.phar
+    │   └── home/               COMPOSER_HOME: config.json, auth.json, global packages,
+    │                           self-update backups, public keys
+    └── 5.6/
+        ├── composer.phar       (2.2 LTS)
+        └── home/
+```
+
+Everything but the download cache is per version, because each of these depends on the PHP running Composer:
+
+- **`self-update`** replaces only that version's phar, and Composer itself never picks a release its PHP cannot run. `self-update --2.2`, `--1` or `--rollback` in an 8.5 project leave 8.3 and 5.6 untouched; rollback only sees that version's own backups.
+- **`global require`** installs tools resolved for that PHP, so a tool installed with 8.5 is never run by 7.4. They land in `home/vendor/bin` (not on `PATH`); run them with `pvm composer global exec <tool>`.
+- **`auth.json` / `config.json`** are per version too — set a token with `pvm composer config --global ...` for each version that needs it, or export `COMPOSER_HOME` yourself to share one home.
+
+Composer resolves dependencies against the PHP that runs it, so `pvm composer require` in a `.php-version` 7.4 project picks packages compatible with 7.4. The extensions Composer needs come with `pvm install` (see [Extensions for Composer](#extensions-for-composer)); `git` is only needed for source installs. `pvm remove <version>` deletes that version's Composer; `pvm self-remove` deletes everything with the data directory.
 
 ---
 
