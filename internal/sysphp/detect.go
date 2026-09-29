@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/version"
 )
 
@@ -69,4 +70,22 @@ func queryVersion(bin string) string {
 		return ""
 	}
 	return v
+}
+
+// OnPath finds the php that runs from path when pvm selects nothing: the
+// first one outside skip (pvm's shim directory), with symlinks resolved so
+// it keeps pointing at the same version when the system default changes.
+func OnPath(path, skip string) (PHP, bool) {
+	bin := process.LookPath("php", path, skip)
+	if bin == "" {
+		return PHP{}, false
+	}
+	if resolved, err := filepath.EvalSymlinks(bin); err == nil {
+		bin = resolved
+	}
+	v := queryVersion(bin)
+	if v == "" {
+		return PHP{}, false
+	}
+	return PHP{Version: v, Binary: bin}, true
 }

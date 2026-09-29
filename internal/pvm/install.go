@@ -8,6 +8,7 @@ func (m *Manager) Install(t Target, onStart func()) error {
 	if err := m.Home.Init(); err != nil {
 		return fmt.Errorf("initialize \"pvm\" directory: %w", err)
 	}
+	m.adoptSystem()
 	if m.Home.Installed(t.Version) {
 		return fmt.Errorf("%s already installed", t)
 	}

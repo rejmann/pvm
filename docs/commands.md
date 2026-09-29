@@ -171,12 +171,13 @@ pvm list
 pvm managed:
   8.3  (current)
   8.4
+  8.2  (installed outside pvm)
 system:
   8.1  (/usr/bin/php8.1)
 ```
 
 **Groups:**
-- `pvm managed` — versions installed via `pvm install`. The active version is marked `(current)`.
+- `pvm managed` — versions installed via `pvm install`, plus the PHP installed before pvm that it adopted, marked `(installed outside pvm)`. The active version is marked `(current)`.
 - `system` — PHP binaries found outside pvm. Versions already tracked by pvm are excluded.
 
 ---
@@ -204,6 +205,22 @@ Arguments:
 
 > On Windows, `pvm remove` deletes `%LOCALAPPDATA%\pvm\php\<branch>\` entirely.
 
+A version [installed before pvm](#php-installed-before-pvm) is only forgotten: pvm deletes its metadata and Composer but leaves the PHP itself on the system, and does not adopt it again.
+
+```
+PHP 8.3 is no longer managed by pvm; it was installed outside pvm and stays on the system.
+```
+
+---
+
+## PHP installed before pvm
+
+When pvm finds no global version the first time it runs, it looks for the `php` already on `PATH` (outside its shim directory, symlinks resolved — e.g. `/usr/bin/php` → `/usr/bin/php8.3`). If it finds one, it records it as an installed version (`versions/<X.Y>/binary`, marked `versions/<X.Y>/system`) and makes it the global version. So the PHP you already had is `current` and in use by `pvm current`, `which`, `run`, `composer` and the shim, with no `pvm use`, and you can `pvm use` back to it after switching.
+
+- It happens once per pvm home (`<pvm-home>/system-checked`); a global version already chosen is never replaced.
+- If pvm already manages that branch, its own version becomes the global one instead.
+- pvm never uninstalls it: `pvm remove` only forgets it and `pvm self-remove --php` keeps it.
+
 ---
 
 ## Per-project versions (`.php-version`)
@@ -223,7 +240,7 @@ Every `php` call goes through the pvm shim, which picks the first match:
 
 1. `PVM_VERSION` environment variable (e.g. `PVM_VERSION=8.2 php -v`)
 2. The nearest `.php-version`, searching from the current directory up to `/`
-3. The global version set by `pvm use`
+3. The global version set by `pvm use` — or the [PHP installed before pvm](#php-installed-before-pvm), adopted as global
 4. The first `php` on `PATH` outside pvm (system PHP)
 
 A version from steps 1–3 that is not installed is an error; pvm never silently falls back to another version.
@@ -363,6 +380,7 @@ pvm current
 
 ```
 Current PHP version: 8.3
+Current PHP version: 8.3 (installed outside pvm)
 Current PHP version: 7.4 (set by /home/me/code/legacy-app/.php-version)
 ```
 
@@ -374,7 +392,7 @@ No PHP version is currently active.
 
 ### What it does
 
-Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active.
+Resolves the version exactly like the shim does (`PVM_VERSION` → `.php-version` → `<pvm-home>/current-version`). The global file is written by `pvm use` and cleared by `pvm remove` when the removed version was active. A PHP installed before pvm is already the global version, without `pvm use` — see [PHP installed before pvm](#php-installed-before-pvm).
 
 ---
 
@@ -434,7 +452,7 @@ pvm self-remove --yes    # no prompt, e.g. in scripts
 ### What it does
 
 1. Lists the pvm binary, the data directory (`~/.pvm`, `%LOCALAPPDATA%\pvm` or `$PVM_HOME`) and the installed PHP versions, then asks for confirmation.
-2. With `--php`, removes each installed PHP version like `pvm remove` does. On Windows the PHP builds live in the data directory, so they are removed even without `--php`; on Linux and macOS they are system/Homebrew packages and are kept otherwise.
+2. With `--php`, removes each installed PHP version like `pvm remove` does, except the ones [installed before pvm](#php-installed-before-pvm), which stay on the system. On Windows the PHP builds live in the data directory, so they are removed even without `--php`; on Linux and macOS they are system/Homebrew packages and are kept otherwise.
 3. On Windows, removes the shim directory and the pvm binary directory from the user `PATH`, and the `# pvm-wrapper` block from the PowerShell profile. Failures here are reported as warnings.
 4. Deletes the data directory.
 5. Deletes the pvm binary. On Windows a running `.exe` cannot be deleted, so it is renamed and a background `cmd.exe` deletes it — and its directory, if left empty — right after pvm exits.

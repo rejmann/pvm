@@ -92,6 +92,23 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("--php keeps versions installed outside pvm", func(t *testing.T) {
+		h := newHome(t)
+		fakeInstall(t, h, "8.3")
+		if err := h.SetSystem("8.2", fakeExe(t)); err != nil {
+			t.Fatal(err)
+		}
+		var calls []string
+
+		err := Run(h, fakeExe(t), true, true, recordingOps(&calls, nil), &bytes.Buffer{}, &bytes.Buffer{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"php 8.3", "integration", "binary"}; !reflect.DeepEqual(calls, want) {
+			t.Errorf("calls = %v, want %v", calls, want)
+		}
+	})
+
 	t.Run("stops when a PHP version cannot be removed", func(t *testing.T) {
 		h := newHome(t)
 		fakeInstall(t, h, "8.3")

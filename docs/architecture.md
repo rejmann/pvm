@@ -36,6 +36,7 @@ pvm/
     │   ├── install.go  use.go  remove.go  list.go
     │   ├── active.go           # Active, Lookup, Select: which PHP runs where
     │   ├── shim.go             # Shim: the php the shim runs, system php as fallback
+    │   ├── system.go           # adopts the PHP installed before pvm as the global version
     │   └── composer.go         # Composer: pvm composer, missing extensions, retry
     ├── home/                   # the pvm data directory and its whole layout
     ├── installer/              # installs PHP: System per OS (build tags)
@@ -51,7 +52,7 @@ pvm/
     ├── composer/               # composer.phar download + signature, env, Output parser
     ├── process/                # Exec (replace pvm), Run (child), LookPath
     ├── phpnet/                 # php.net releases API + 24 h cache
-    ├── sysphp/                 # PHP outside pvm: Detect, Probe
+    ├── sysphp/                 # PHP outside pvm: Detect, OnPath, Probe
     ├── phpext/                 # extension names: base set, aliases (ext-dom → xml)
     ├── project/                # .php-version lookup
     ├── selfupdate/             # pvm's own releases: download, swap, remove
@@ -69,6 +70,7 @@ flowchart LR
     installer --> home & phpext & phpnet & version
     shim --> home & version
     composer & home & phpnet & sysphp --> version
+    sysphp --> process
 ```
 
 (`installer → phpnet` and `shim → version` exist only in the Windows build.)
@@ -83,7 +85,8 @@ flowchart LR
 
 ```
 ~/.pvm/                        (or $PVM_HOME)
-├── current-version            # plain text: "8.3" — written by pvm use
+├── current-version            # plain text: "8.3" — written by pvm use (or adoption)
+├── system-checked             # marker: pvm already looked for a PHP installed before it
 ├── cache/
 │   └── available.json         # php.net branches, cached for 24 h
 ├── composer/                  # created by `pvm composer`
@@ -99,7 +102,8 @@ flowchart LR
 └── versions/
     ├── 8.3/
     │   ├── binary             # plain text: /usr/bin/php8.3
-    │   └── packages           # extension packages pvm installed (Linux)
+    │   ├── packages           # extension packages pvm installed (Linux)
+    │   └── system             # marker: installed outside pvm, adopted (never uninstalled)
     └── 8.4/
         └── binary             # plain text: /usr/bin/php8.4
 ```

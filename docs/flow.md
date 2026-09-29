@@ -67,7 +67,9 @@ Three ideas carry the whole design:
 | Path | Holds | Written by | Read by | Removed by |
 |------|-------|------------|---------|------------|
 | `versions/<v>/binary` | path of the php binary for `<v>` (e.g. `/usr/bin/php8.3`) | `install` | every command that needs a version | `remove`, `self-remove` |
-| `current-version` | the global version, e.g. `8.3` | `use` | `list`, `current`, `which`, `run`, `composer`, the shim | `remove` of the active version (Linux/macOS), `self-remove` |
+| `current-version` | the global version, e.g. `8.3` | `use`, or the first run when adopting the PHP installed before pvm | `list`, `current`, `which`, `run`, `composer`, the shim | `remove` of the active version (Linux/macOS), `self-remove` |
+| `versions/<v>/system` | empty marker: `<v>` was installed outside pvm and only adopted — `remove` forgets it, never uninstalls it | first run (adoption) | `list`, `current`, `remove`, `self-remove` | `remove`, `self-remove` |
+| `system-checked` | empty marker: pvm already looked for a PHP installed before it | first run | every command that reads the global version | `self-remove` |
 | `bin/php` (Linux) · `shims/php` (macOS) | `#!/bin/sh` shim: `exec pvm shim php "$@"` | `use` | the shell, via `PATH` | `self-remove` |
 | `shims\php.bat` (Windows) | batch shim running `php\<current-version>\php.exe` | `use` | the shell, via `PATH` | `self-remove` |
 | `php\<branch>\` (Windows) | the extracted PHP build, with the `php.ini` pvm writes | `install` | the shims, via `binary` | `remove`, `self-remove` |
@@ -309,6 +311,7 @@ Linux, starting from nothing:
 
 - **Nothing global, no hidden state.** Everything pvm creates is under `<pvm-home>` or is a package it installed through the package manager — and pvm removes it. It never edits shell config files on Linux/macOS; the PATH line is the user's.
 - **Explicit over clever.** A selected version that isn't installed is an error, never a silent fallback. Only the `php` shim falls back to the system PHP, and only when nothing is selected at all.
+- **The PHP you already had keeps working.** On its first run pvm adopts the `php` already on `PATH` as the global version (recorded, not reinstalled), so it is current without `pvm use`. pvm never uninstalls what it didn't install.
 - **Per-call resolution.** No "current shell" state: the same command in two directories can use two versions, and `PVM_VERSION` overrides for a single call.
 - **Only what's needed on the machine.** Composer's extraction needs are met by the PHP pvm installs; Composer itself is downloaded on first use and verified with its publisher's key.
 - **Failures don't leave half states.** Binaries, phars and caches are written to a temp file and renamed into place.

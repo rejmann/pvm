@@ -29,4 +29,7 @@ type Manager struct {
 	Activator Activator
 	LTS       version.Resolver    // resolves the "lts" alias
 	System    func() []sysphp.PHP // PHP installed outside pvm
+	// SystemPHP finds the php already in use outside pvm, adopted as the
+	// global version when pvm has none (see adoptSystem).
+	SystemPHP func() (sysphp.PHP, bool)
 }
