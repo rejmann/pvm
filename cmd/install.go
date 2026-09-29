@@ -4,13 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rejmann/pvm/internal/home"
-	"github.com/rejmann/pvm/internal/installer"
-	"github.com/rejmann/pvm/internal/version"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
-
-type InstallerFunc func(h *home.Dir, ver string) error
 
 var InstallCmd = &cobra.Command{
 	Use:     "install [i] <version|lts>",
@@ -21,56 +17,18 @@ var InstallCmd = &cobra.Command{
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	return installVersion(
-		args[0],
-		home.Default(),
-		phpLTSResolver{ctx: cmd.Context()},
-		installer.Install,
-		cmd.OutOrStdout(),
-		cmd.ErrOrStderr(),
-	)
+	return installVersion(newManager(cmd.Context()), args[0], cmd.OutOrStdout())
 }
 
-func installVersion(
-	arg string,
-	h *home.Dir,
-	r version.Resolver,
-	install InstallerFunc,
-	out,
-	errOut io.Writer,
-) error {
-	concrete, wasAlias, err := version.Resolve(arg, r)
+func installVersion(m *pvm.Manager, arg string, out io.Writer) error {
+	t, err := m.Target(arg)
 	if err != nil {
 		return err
 	}
-
-	if _, err := version.Parse(concrete); err != nil {
-		return fmt.Errorf("invalid version %q: %w", concrete, err)
+	err = m.Install(t, func() { fmt.Fprintf(out, "Installing PHP %s...\n", t) })
+	if err != nil {
+		return err
 	}
-
-	if err := h.Init(); err != nil {
-		return fmt.Errorf("initialize \"pvm\" directory: %w", err)
-	}
-
-	if h.Installed(concrete) {
-		label := concrete
-		if wasAlias {
-			label = fmt.Sprintf("%s (lts)", concrete)
-		}
-		return fmt.Errorf("%s already installed", label)
-	}
-
-	label := concrete
-	if wasAlias {
-		label = fmt.Sprintf("%s (lts)", concrete)
-	}
-	fmt.Fprintf(out, "Installing PHP %s...\n", label)
-
-	if err := install(h, concrete); err != nil {
-		return fmt.Errorf("install PHP %s: %w", concrete, err)
-	}
-
-	fmt.Fprintf(out, "PHP %s installed successfully.\n", label)
-
+	fmt.Fprintf(out, "PHP %s installed successfully.\n", t)
 	return nil
 }

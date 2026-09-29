@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/rejmann/pvm/internal/pvm"
 )
 
 func TestShimTarget(t *testing.T) {
@@ -15,7 +17,7 @@ func TestShimTarget(t *testing.T) {
 		setGlobal(t, h, "8.3")
 		sys := fakeExecutable(t, t.TempDir(), "php")
 
-		got, err := shimTarget(h, t.TempDir(), "", filepath.Dir(sys))
+		got, err := shimTarget(testManager(t, h), t.TempDir(), "", filepath.Dir(sys))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,7 +33,7 @@ func TestShimTarget(t *testing.T) {
 		sys := fakeExecutable(t, t.TempDir(), "php")
 		path := filepath.Dir(shim) + string(os.PathListSeparator) + filepath.Dir(sys)
 
-		got, err := shimTarget(h, t.TempDir(), "", path)
+		got, err := shimTarget(testManager(t, h), t.TempDir(), "", path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,9 +44,9 @@ func TestShimTarget(t *testing.T) {
 
 	t.Run("no version and no system php", func(t *testing.T) {
 		h := newHome(t)
-		_, err := shimTarget(h, t.TempDir(), "", t.TempDir())
-		if !errors.Is(err, ErrNoActiveVersion) {
-			t.Fatalf("error = %v, want ErrNoActiveVersion", err)
+		_, err := shimTarget(testManager(t, h), t.TempDir(), "", t.TempDir())
+		if !errors.Is(err, pvm.ErrNoActiveVersion) {
+			t.Fatalf("error = %v, want pvm.ErrNoActiveVersion", err)
 		}
 	})
 
@@ -52,7 +54,7 @@ func TestShimTarget(t *testing.T) {
 		h := newHome(t)
 		sys := fakeExecutable(t, t.TempDir(), "php")
 
-		if _, err := shimTarget(h, t.TempDir(), "8.1", filepath.Dir(sys)); err == nil {
+		if _, err := shimTarget(testManager(t, h), t.TempDir(), "8.1", filepath.Dir(sys)); err == nil {
 			t.Fatal("expected not-installed error instead of silently using system php")
 		}
 	})

@@ -17,6 +17,7 @@ import (
 	"github.com/rejmann/pvm/internal/composer"
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/installer"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -56,10 +57,11 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	h := home.Default()
+	m := newManager(cmd.Context())
+	h := m.Home
 
-	a, err := resolveActive(h, dir, os.Getenv(envVersion))
-	if errors.Is(err, ErrNoActiveVersion) {
+	a, err := m.Active(dir, os.Getenv(pvm.EnvVersion))
+	if errors.Is(err, pvm.ErrNoActiveVersion) {
 		return fmt.Errorf("%w — run: pvm use <version>", err)
 	}
 	if err != nil {
@@ -84,7 +86,7 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	}
 
 	env := composer.Env(h.ComposerDir(), a.Version, os.Getenv)
-	env[envVersion] = a.Version
+	env[pvm.EnvVersion] = a.Version
 	for k, v := range env {
 		if err := os.Setenv(k, v); err != nil {
 			return err

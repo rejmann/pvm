@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,10 +9,8 @@ import (
 	"strings"
 
 	"github.com/rejmann/pvm/internal/home"
-	"github.com/rejmann/pvm/internal/project"
-	"github.com/rejmann/pvm/internal/symlink"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/rejmann/pvm/internal/system"
-	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -33,53 +30,20 @@ func runUse(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	return useVersion(
-		arg,
-		home.Default(),
-		phpLTSResolver{ctx: cmd.Context()},
-		cmd.OutOrStdout(),
-	)
+	return useVersion(newManager(cmd.Context()), arg, cmd.OutOrStdout())
 }
 
-func useVersion(
-	arg string,
-	h *home.Dir,
-	r version.Resolver,
-	out io.Writer,
-) error {
-	concrete, wasAlias, err := version.Resolve(arg, r)
+func useVersion(m *pvm.Manager, arg string, out io.Writer) error {
+	t, err := m.Target(arg)
 	if err != nil {
 		return err
 	}
-
-	if _, err := version.Parse(concrete); err != nil {
-		return fmt.Errorf("invalid version %q: %w", concrete, err)
-	}
-
-	if !h.Installed(concrete) {
-		label := concrete
-		if wasAlias {
-			label = fmt.Sprintf("%s (lts)", concrete)
-		}
-		return fmt.Errorf("%s not installed — run: pvm install %s", label, arg)
-	}
-
-	binPath, err := h.Binary(concrete)
-	if err != nil {
+	if err := m.Use(t); err != nil {
 		return err
 	}
 
-	if err := symlink.SetCurrent(h, concrete, binPath); err != nil {
-		return fmt.Errorf("activate PHP %s: %w", concrete, err)
-	}
-
-	label := concrete
-	if wasAlias {
-		label = fmt.Sprintf("%s (lts)", concrete)
-	}
-	fmt.Fprintf(out, "Now using PHP %s.\n", label)
-	printPathHint(out, h)
+	fmt.Fprintf(out, "Now using PHP %s.\n", t)
+	printPathHint(out, m.Home)
 	return nil
 }
 
@@ -90,14 +54,10 @@ func useArg(args []string, dir string, out io.Writer) (string, error) {
 		return args[0], nil
 	}
 
-	v, path, err := project.Find(dir)
-	if errors.Is(err, project.ErrNotFound) {
-		return "", fmt.Errorf("no version given and no %s found — run: pvm use <version>", project.FileName)
-	}
+	v, path, err := pvm.ProjectVersion(dir)
 	if err != nil {
 		return "", err
 	}
-
 	fmt.Fprintf(out, "Found %s with version %s.\n", path, v)
 	return v, nil
 }

@@ -1,28 +1,33 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/pvm"
 )
 
-type fakeResolver struct {
-	v   string
-	err error
+// ltsResolver resolves the "lts" alias to itself.
+type ltsResolver string
+
+func (r ltsResolver) ResolveLTS() (string, error) { return string(r), nil }
+
+// fakeSystem installs, removes and activates by only updating the pvm home.
+type fakeSystem struct{ t *testing.T }
+
+func (f fakeSystem) Install(h *home.Dir, ver string) error { fakeInstall(f.t, h, ver); return nil }
+func (f fakeSystem) Remove(*home.Dir, string) error        { return nil }
+func (f fakeSystem) Activate(h *home.Dir, ver, _ string) error {
+	return h.SetCurrent(ver)
 }
+func (f fakeSystem) Deactivate(h *home.Dir) error { return h.ClearCurrent() }
 
-func (f fakeResolver) ResolveLTS() (string, error) { return f.v, f.err }
-
-// failResolver fails the test if the lts alias is resolved when it shouldn't be.
-type failResolver struct{ t *testing.T }
-
-func (f failResolver) ResolveLTS() (string, error) {
-	f.t.Helper()
-	f.t.Error("ResolveLTS called unexpectedly")
-	return "", errors.New("unexpected")
+// testManager runs the use cases on h without touching the system.
+func testManager(t *testing.T, h *home.Dir) *pvm.Manager {
+	t.Helper()
+	return &pvm.Manager{Home: h, Installer: fakeSystem{t}, Activator: fakeSystem{t}, LTS: ltsResolver("8.4")}
 }
 
 func newHome(t *testing.T) *home.Dir {

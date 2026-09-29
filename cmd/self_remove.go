@@ -47,7 +47,7 @@ func init() {
 // selfRemoveOps holds the side effects of self-remove that touch the system,
 // so tests can replace them.
 type selfRemoveOps struct {
-	removeVersion     RemoverFunc
+	removeVersion     func(h *home.Dir, ver string) error
 	removeIntegration func(h *home.Dir, binDir string) error
 	removeBinary      func(exe string) error
 }

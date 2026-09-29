@@ -15,7 +15,7 @@ func TestPrintCurrent(t *testing.T) {
 		h := newHome(t)
 		var out bytes.Buffer
 
-		if err := printCurrent(h, t.TempDir(), "", &out); err != nil {
+		if err := printCurrent(testManager(t, h), t.TempDir(), "", &out); err != nil {
 			t.Fatal(err)
 		}
 		if got, want := out.String(), "No PHP version is currently active.\n"; got != want {
@@ -29,7 +29,7 @@ func TestPrintCurrent(t *testing.T) {
 		setGlobal(t, h, "8.3")
 		var out bytes.Buffer
 
-		if err := printCurrent(h, t.TempDir(), "", &out); err != nil {
+		if err := printCurrent(testManager(t, h), t.TempDir(), "", &out); err != nil {
 			t.Fatal(err)
 		}
 		if got, want := out.String(), "Current PHP version: 8.3\n"; got != want {
@@ -44,7 +44,7 @@ func TestPrintCurrent(t *testing.T) {
 		writePHPVersion(t, dir, "8.2")
 		var out bytes.Buffer
 
-		if err := printCurrent(h, dir, "", &out); err != nil {
+		if err := printCurrent(testManager(t, h), dir, "", &out); err != nil {
 			t.Fatal(err)
 		}
 		want := "Current PHP version: 8.2 (set by " + filepath.Join(dir, ".php-version") + ")\n"
@@ -57,7 +57,7 @@ func TestPrintCurrent(t *testing.T) {
 		h := newHome(t)
 		setGlobal(t, h, "8.1")
 
-		err := printCurrent(h, t.TempDir(), "", &bytes.Buffer{})
+		err := printCurrent(testManager(t, h), t.TempDir(), "", &bytes.Buffer{})
 		if err == nil || !strings.Contains(err.Error(), "not installed") {
 			t.Fatalf("error = %v, want not installed", err)
 		}

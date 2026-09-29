@@ -4,15 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rejmann/pvm/internal/composer"
-	"github.com/rejmann/pvm/internal/home"
-	"github.com/rejmann/pvm/internal/installer"
-	"github.com/rejmann/pvm/internal/symlink"
-	"github.com/rejmann/pvm/internal/version"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
-
-type RemoverFunc func(h *home.Dir, ver string) error
 
 var RemoveCmd = &cobra.Command{
 	Use:     "remove [rm] <version>",
@@ -23,44 +17,20 @@ var RemoveCmd = &cobra.Command{
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	return removeVersion(
-		args[0],
-		home.Default(),
-		installer.Remove,
-		cmd.OutOrStdout(),
-		cmd.ErrOrStderr(),
-	)
+	return removeVersion(newManager(cmd.Context()), args[0], cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
-func removeVersion(arg string, h *home.Dir, remove RemoverFunc, out, errOut io.Writer) error {
-	if _, err := version.Parse(arg); err != nil {
-		return fmt.Errorf("invalid version %q: %w", arg, err)
+func removeVersion(m *pvm.Manager, v string, out, errOut io.Writer) error {
+	r, err := m.Remove(v)
+	if err != nil {
+		return err
 	}
-
-	if !h.Installed(arg) {
-		return fmt.Errorf("PHP %s is not installed", arg)
+	if r.ComposerErr != nil {
+		fmt.Fprintf(errOut, "Warning: could not remove Composer for PHP %s: %v\n", v, r.ComposerErr)
 	}
-
-	current, _ := h.Current()
-	isCurrent := current == arg
-
-	if err := remove(h, arg); err != nil {
-		return fmt.Errorf("remove PHP %s: %w", arg, err)
+	if r.WasCurrent {
+		fmt.Fprintf(errOut, "Warning: PHP %s was the active version. No version is now active.\n", v)
 	}
-
-	if err := h.RemoveVersion(arg); err != nil {
-		return fmt.Errorf("remove PHP %s metadata: %w", arg, err)
-	}
-
-	if err := composer.Remove(h.ComposerDir(), arg); err != nil {
-		fmt.Fprintf(errOut, "Warning: could not remove Composer for PHP %s: %v\n", arg, err)
-	}
-
-	if isCurrent {
-		_ = symlink.RemoveCurrent(h)
-		fmt.Fprintf(errOut, "Warning: PHP %s was the active version. No version is now active.\n", arg)
-	}
-
-	fmt.Fprintf(out, "PHP %s removed.\n", arg)
+	fmt.Fprintf(out, "PHP %s removed.\n", v)
 	return nil
 }

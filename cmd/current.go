@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
 
@@ -23,20 +23,20 @@ func runCurrent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printCurrent(home.Default(), dir, os.Getenv(envVersion), cmd.OutOrStdout())
+	return printCurrent(newManager(cmd.Context()), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
 }
 
-func printCurrent(h *home.Dir, dir, env string, out io.Writer) error {
-	a, err := resolveActive(h, dir, env)
+func printCurrent(m *pvm.Manager, dir, env string, out io.Writer) error {
+	a, err := m.Active(dir, env)
+	if errors.Is(err, pvm.ErrNoActiveVersion) {
+		fmt.Fprintln(out, "No PHP version is currently active.")
+		return nil
+	}
 	if err != nil {
-		if errors.Is(err, ErrNoActiveVersion) {
-			fmt.Fprintln(out, "No PHP version is currently active.")
-			return nil
-		}
 		return err
 	}
 
-	if a.Source == "global" {
+	if a.Global() {
 		fmt.Fprintf(out, "Current PHP version: %s\n", a.Version)
 	} else {
 		fmt.Fprintf(out, "Current PHP version: %s (set by %s)\n", a.Version, a.Source)

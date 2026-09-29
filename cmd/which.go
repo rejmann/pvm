@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/spf13/cobra"
 )
 
@@ -22,12 +22,12 @@ func runWhich(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printWhich(home.Default(), dir, os.Getenv(envVersion), cmd.OutOrStdout())
+	return printWhich(newManager(cmd.Context()), dir, os.Getenv(pvm.EnvVersion), cmd.OutOrStdout())
 }
 
-func printWhich(h *home.Dir, dir, env string, out io.Writer) error {
-	a, err := resolveActive(h, dir, env)
-	if errors.Is(err, ErrNoActiveVersion) {
+func printWhich(m *pvm.Manager, dir, env string, out io.Writer) error {
+	a, err := m.Active(dir, env)
+	if errors.Is(err, pvm.ErrNoActiveVersion) {
 		return fmt.Errorf("%w — run: pvm use <version>", err)
 	}
 	if err != nil {
