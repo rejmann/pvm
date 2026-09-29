@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
 )
 
-type InstallerFunc func(base, ver string) error
+type InstallerFunc func(h *home.Dir, ver string) error
 
 var InstallCmd = &cobra.Command{
 	Use:     "install [i] <version|lts>",
@@ -23,7 +23,7 @@ var InstallCmd = &cobra.Command{
 func runInstall(cmd *cobra.Command, args []string) error {
 	return installVersion(
 		args[0],
-		phpfs.NewManager(baseDir()),
+		home.Default(),
 		phpLTSResolver{ctx: cmd.Context()},
 		installer.Install,
 		cmd.OutOrStdout(),
@@ -33,7 +33,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 func installVersion(
 	arg string,
-	m *phpfs.Manager,
+	h *home.Dir,
 	r version.Resolver,
 	install InstallerFunc,
 	out,
@@ -48,11 +48,11 @@ func installVersion(
 		return fmt.Errorf("invalid version %q: %w", concrete, err)
 	}
 
-	if err := m.EnsurebaseDir(); err != nil {
+	if err := h.Init(); err != nil {
 		return fmt.Errorf("initialize \"pvm\" directory: %w", err)
 	}
 
-	if m.VersionInstalled(concrete) {
+	if h.Installed(concrete) {
 		label := concrete
 		if wasAlias {
 			label = fmt.Sprintf("%s (lts)", concrete)
@@ -66,7 +66,7 @@ func installVersion(
 	}
 	fmt.Fprintf(out, "Installing PHP %s...\n", label)
 
-	if err := install(m.Base, concrete); err != nil {
+	if err := install(h, concrete); err != nil {
 		return fmt.Errorf("install PHP %s: %w", concrete, err)
 	}
 

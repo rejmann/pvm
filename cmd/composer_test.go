@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/rejmann/pvm/internal/installer"
+
+	"github.com/rejmann/pvm/internal/home"
 )
 
 func TestParseProbe(t *testing.T) {
@@ -50,7 +52,7 @@ func TestHasArchiveTool(t *testing.T) {
 
 func TestOfferExtensions(t *testing.T) {
 	var got []string
-	installExtensions = func(_, _ string, exts []string) error {
+	installExtensions = func(_ *home.Dir, _ string, exts []string) error {
 		got = append(got, exts...)
 		return nil
 	}
@@ -58,7 +60,7 @@ func TestOfferExtensions(t *testing.T) {
 
 	t.Run("not a terminal", func(t *testing.T) {
 		var out bytes.Buffer
-		if offerExtensions(t.TempDir(), "8.3", []string{"zip"}, "which Composer needs", false, strings.NewReader("y\n"), &out) {
+		if offerExtensions(home.New(t.TempDir()), "8.3", []string{"zip"}, "which Composer needs", false, strings.NewReader("y\n"), &out) {
 			t.Error("reported installed")
 		}
 		if !strings.Contains(out.String(), "PHP 8.3 is missing the zip extension, which Composer needs") ||
@@ -69,7 +71,7 @@ func TestOfferExtensions(t *testing.T) {
 
 	t.Run("declined", func(t *testing.T) {
 		var out bytes.Buffer
-		if offerExtensions(t.TempDir(), "8.3", []string{"zip"}, "x", true, strings.NewReader("n\n"), &out) {
+		if offerExtensions(home.New(t.TempDir()), "8.3", []string{"zip"}, "x", true, strings.NewReader("n\n"), &out) {
 			t.Error("reported installed")
 		}
 	})
@@ -77,7 +79,7 @@ func TestOfferExtensions(t *testing.T) {
 	t.Run("accepted", func(t *testing.T) {
 		got = nil
 		var out bytes.Buffer
-		if !offerExtensions(t.TempDir(), "8.5", []string{"xml", "intl"}, "x", true, strings.NewReader("y\n"), &out) {
+		if !offerExtensions(home.New(t.TempDir()), "8.5", []string{"xml", "intl"}, "x", true, strings.NewReader("y\n"), &out) {
 			t.Errorf("not installed, output = %q", out.String())
 		}
 		if strings.Join(got, ",") != "xml,intl" || !strings.Contains(out.String(), "the xml, intl extensions") {
@@ -86,9 +88,9 @@ func TestOfferExtensions(t *testing.T) {
 	})
 
 	t.Run("install fails", func(t *testing.T) {
-		installExtensions = func(_, _ string, _ []string) error { return errors.New("boom") }
+		installExtensions = func(_ *home.Dir, _ string, _ []string) error { return errors.New("boom") }
 		var out bytes.Buffer
-		if offerExtensions(t.TempDir(), "8.5", []string{"xml"}, "x", true, strings.NewReader("y\n"), &out) {
+		if offerExtensions(home.New(t.TempDir()), "8.5", []string{"xml"}, "x", true, strings.NewReader("y\n"), &out) {
 			t.Error("reported installed")
 		}
 		if !strings.Contains(out.String(), "Warning: boom") {

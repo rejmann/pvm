@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/selfupdate"
 	"github.com/rejmann/pvm/internal/symlink"
@@ -48,7 +48,7 @@ func init() {
 // so tests can replace them.
 type selfRemoveOps struct {
 	removeVersion     RemoverFunc
-	removeIntegration func(base, binDir string) error
+	removeIntegration func(h *home.Dir, binDir string) error
 	removeBinary      func(exe string) error
 }
 
@@ -69,16 +69,16 @@ func runSelfRemove(cmd *cobra.Command, args []string) error {
 		removeIntegration: symlink.RemoveIntegration,
 		removeBinary:      selfupdate.RemoveBinary,
 	}
-	return selfRemove(phpfs.NewManager(baseDir()), exe, withPHP, yes, ops,
+	return selfRemove(home.Default(), exe, withPHP, yes, ops,
 		cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
-func selfRemove(m *phpfs.Manager, exe string, withPHP, yes bool, ops selfRemoveOps, in io.Reader, out, errOut io.Writer) error {
-	if err := checkRemovableBase(m.Base); err != nil {
+func selfRemove(h *home.Dir, exe string, withPHP, yes bool, ops selfRemoveOps, in io.Reader, out, errOut io.Writer) error {
+	if err := checkRemovableBase(h.Path); err != nil {
 		return err
 	}
 
-	versions, err := m.InstalledVersions()
+	versions, err := h.Versions()
 	if err != nil {
 		return fmt.Errorf("list installed versions: %w", err)
 	}
@@ -87,7 +87,7 @@ func selfRemove(m *phpfs.Manager, exe string, withPHP, yes bool, ops selfRemoveO
 
 	fmt.Fprintln(out, "This will remove:")
 	fmt.Fprintf(out, "  %s\n", exe)
-	fmt.Fprintf(out, "  %s\n", m.Base)
+	fmt.Fprintf(out, "  %s\n", h.Path)
 	if len(versions) > 0 {
 		if phpGoes {
 			fmt.Fprintf(out, "  PHP %s\n", strings.Join(versions, ", "))
@@ -103,19 +103,19 @@ func selfRemove(m *phpfs.Manager, exe string, withPHP, yes bool, ops selfRemoveO
 
 	if withPHP {
 		for _, v := range versions {
-			if err := ops.removeVersion(m.Base, v); err != nil {
+			if err := ops.removeVersion(h, v); err != nil {
 				return fmt.Errorf("remove PHP %s: %w", v, err)
 			}
 			fmt.Fprintf(out, "PHP %s removed.\n", v)
 		}
 	}
 
-	if err := ops.removeIntegration(m.Base, filepath.Dir(exe)); err != nil {
+	if err := ops.removeIntegration(h, filepath.Dir(exe)); err != nil {
 		fmt.Fprintf(errOut, "Warning: %v\n", err)
 	}
 
-	if err := os.RemoveAll(m.Base); err != nil {
-		return fmt.Errorf("remove %s: %w", m.Base, err)
+	if err := os.RemoveAll(h.Path); err != nil {
+		return fmt.Errorf("remove %s: %w", h.Path, err)
 	}
 
 	if err := ops.removeBinary(exe); err != nil {
@@ -132,7 +132,7 @@ func selfRemove(m *phpfs.Manager, exe string, withPHP, yes bool, ops selfRemoveO
 	if runtime.GOOS == system.Windows {
 		fmt.Fprintln(out, "Open a new terminal to pick up the updated PATH.")
 	} else {
-		fmt.Fprintf(out, "If your shell config adds %s to PATH, remove that line.\n", symlink.ShimDir(m.Base))
+		fmt.Fprintf(out, "If your shell config adds %s to PATH, remove that line.\n", h.ShimDir())
 	}
 	return nil
 }

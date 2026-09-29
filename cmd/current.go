@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/spf13/cobra"
 )
 
@@ -23,11 +23,11 @@ func runCurrent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printCurrent(phpfs.NewManager(baseDir()), dir, os.Getenv(envVersion), cmd.OutOrStdout())
+	return printCurrent(home.Default(), dir, os.Getenv(envVersion), cmd.OutOrStdout())
 }
 
-func printCurrent(m *phpfs.Manager, dir, env string, out io.Writer) error {
-	a, err := resolveActive(m, dir, env)
+func printCurrent(h *home.Dir, dir, env string, out io.Writer) error {
+	a, err := resolveActive(h, dir, env)
 	if err != nil {
 		if errors.Is(err, ErrNoActiveVersion) {
 			fmt.Fprintln(out, "No PHP version is currently active.")

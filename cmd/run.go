@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +56,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	installed, bin, err := runResolve(
 		versionArg,
-		phpfs.NewManager(baseDir()),
+		home.Default(),
 		phpLTSResolver{ctx: cmd.Context()},
 		dir,
 		os.Getenv(envVersion),
@@ -158,12 +158,12 @@ func checkRunFile(rest []string, dir string) error {
 
 // runResolve returns the version and binary to run: versionArg when given,
 // otherwise the version in use for dir.
-func runResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, env string) (installed, bin string, err error) {
+func runResolve(versionArg string, h *home.Dir, r version.Resolver, dir, env string) (installed, bin string, err error) {
 	if versionArg != "" {
-		return runTarget(versionArg, m, r)
+		return runTarget(versionArg, h, r)
 	}
 
-	a, err := resolveActive(m, dir, env)
+	a, err := resolveActive(h, dir, env)
 	if errors.Is(err, ErrNoActiveVersion) {
 		return "", "", fmt.Errorf("%w — pass one (pvm run 8.3 ...) or run: pvm use <version>", err)
 	}
@@ -175,7 +175,7 @@ func runResolve(versionArg string, m *phpfs.Manager, r version.Resolver, dir, en
 
 // runTarget resolves arg (a version, branch or "lts") to an installed
 // version and its php binary.
-func runTarget(arg string, m *phpfs.Manager, r version.Resolver) (installed, bin string, err error) {
+func runTarget(arg string, h *home.Dir, r version.Resolver) (installed, bin string, err error) {
 	concrete, _, err := version.Resolve(arg, r)
 	if err != nil {
 		return "", "", err
@@ -185,12 +185,12 @@ func runTarget(arg string, m *phpfs.Manager, r version.Resolver) (installed, bin
 		return "", "", fmt.Errorf("invalid version %q: %w", concrete, err)
 	}
 
-	installed, ok := m.MatchInstalled(concrete)
+	installed, ok := h.Match(concrete)
 	if !ok {
 		return "", "", fmt.Errorf("PHP %s is not installed — run: pvm install %s", concrete, concrete)
 	}
 
-	bin, err = m.GetVersionBinary(installed)
+	bin, err = h.Binary(installed)
 	if err != nil {
 		return "", "", err
 	}

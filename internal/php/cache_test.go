@@ -16,7 +16,7 @@ var sampleBranches = []Branch{
 }
 
 func TestCacheRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "cache", "available.json")
 
 	if _, ok := readCache(dir); ok {
 		t.Fatal("readCache on empty dir should miss")
@@ -36,7 +36,7 @@ func TestCacheRoundTrip(t *testing.T) {
 }
 
 func TestReadCacheSortsUnorderedCache(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "cache", "available.json")
 	writeRawCache(t, dir, branchCache{
 		CachedAt: time.Now(),
 		Branches: []Branch{sampleBranches[1], sampleBranches[0]},
@@ -52,7 +52,7 @@ func TestReadCacheSortsUnorderedCache(t *testing.T) {
 }
 
 func TestCacheExpired(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "cache", "available.json")
 	writeRawCache(t, dir, branchCache{
 		CachedAt: time.Now().Add(-cacheTTL - time.Minute),
 		Branches: sampleBranches,
@@ -64,8 +64,8 @@ func TestCacheExpired(t *testing.T) {
 }
 
 func TestCacheCorrupt(t *testing.T) {
-	dir := t.TempDir()
-	path := availableCacheFile(dir)
+	dir := filepath.Join(t.TempDir(), "cache", "available.json")
+	path := dir
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestCacheCorrupt(t *testing.T) {
 }
 
 func TestFetchAllBranchesCachedUsesFreshCache(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "cache", "available.json")
 	writeRawCache(t, dir, branchCache{CachedAt: time.Now(), Branches: sampleBranches})
 
 	// A cancelled context guarantees any network call would fail,
@@ -102,7 +102,7 @@ func TestFetchAllBranchesCachedUsesFreshCache(t *testing.T) {
 
 func writeRawCache(t *testing.T, dir string, c branchCache) {
 	t.Helper()
-	path := availableCacheFile(dir)
+	path := dir
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		t.Fatal(err)
 	}

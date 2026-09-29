@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
 )
 
-// EnsureShim (re)writes the php shim script in ShimDir(base).
-func EnsureShim(base string) error {
+// EnsureShim (re)writes the php shim script in the shim directory of h.
+func EnsureShim(h *home.Dir) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("locate pvm executable: %w", err)
@@ -18,7 +20,7 @@ func EnsureShim(base string) error {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	return writeShim(filepath.Join(ShimDir(base), "php"), exe)
+	return writeShim(filepath.Join(h.ShimDir(), "php"), exe)
 }
 
 // shimScript delegates to `pvm shim php`, which picks the version for the

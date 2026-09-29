@@ -9,19 +9,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
 )
 
-func SetCurrent(base, version, binaryPath string) error {
-	return setCurrentWindows(base, version, binaryPath)
+func SetCurrent(h *home.Dir, version, binaryPath string) error {
+	return setCurrentWindows(h, version, binaryPath)
 }
 
-func RemoveCurrent(base string) error {
+func RemoveCurrent(h *home.Dir) error {
 	return fmt.Errorf("to be implemented: remove current version on Windows (manual PATH cleanup required)")
 }
 
-func setCurrentWindows(base, version, binaryPath string) error {
+func setCurrentWindows(h *home.Dir, version, binaryPath string) error {
 	// prefer the deterministic install dir over whatever is stored in the binary file
-	if p := windowsInstalledBinary(base, version); p != "" {
+	if p := windowsInstalledBinary(h, version); p != "" {
 		binaryPath = p
 	}
 
@@ -29,7 +31,7 @@ func setCurrentWindows(base, version, binaryPath string) error {
 		return fmt.Errorf("PHP %s binary not found — run: pvm install %s", version, version)
 	}
 
-	shimDir := filepath.Join(base, "shims")
+	shimDir := h.ShimDir()
 	if err := os.MkdirAll(shimDir, 0755); err != nil {
 		return fmt.Errorf("create shims directory: %w", err)
 	}
@@ -40,8 +42,8 @@ func setCurrentWindows(base, version, binaryPath string) error {
 		"@echo off\r\n"+
 			"set /p PHP_VER=<\"%s\"\r\n"+
 			"\"%s\\%%PHP_VER%%\\php.exe\" %%*\r\n",
-		filepath.Join(base, "current-version"),
-		filepath.Join(base, "php"),
+		h.CurrentFile(),
+		h.PHPRoot(),
 	)
 	shimPath := filepath.Join(shimDir, "php.bat")
 	if err := os.WriteFile(shimPath, []byte(content), 0644); err != nil {
@@ -51,7 +53,7 @@ func setCurrentWindows(base, version, binaryPath string) error {
 	prependToUserPath(shimDir)
 	installPowerShellWrapper(shimDir)
 
-	return writeCurrentVersion(base, version)
+	return h.SetCurrent(version)
 }
 
 // installPowerShellWrapper writes a pvm wrapper function to the user's
@@ -82,8 +84,8 @@ func installPowerShellWrapper(shimDir string) {
 // RemoveIntegration undoes what pvm set up outside its data directory: the
 // shim directory and binDir entries in the user PATH, and the wrapper in the
 // PowerShell profile.
-func RemoveIntegration(base, binDir string) error {
-	if err := removeFromUserPath(ShimDir(base), binDir); err != nil {
+func RemoveIntegration(h *home.Dir, binDir string) error {
+	if err := removeFromUserPath(h.ShimDir(), binDir); err != nil {
 		return fmt.Errorf("update user PATH: %w", err)
 	}
 
@@ -157,10 +159,9 @@ $newPath = ($dir + ';' + ($parts -join ';')).TrimEnd(';')
 }
 
 // windowsInstalledBinary returns the php.exe path from the pvm-managed install
-// directory (base/php/<major>.<minor>/php.exe) if it exists.
-func windowsInstalledBinary(base, version string) string {
-	branch := versionBranch(version)
-	p := filepath.Join(base, "php", branch, "php.exe")
+// directory (php/<major>.<minor>/php.exe) if it exists.
+func windowsInstalledBinary(h *home.Dir, version string) string {
+	p := filepath.Join(h.PHPDir(versionBranch(version)), "php.exe")
 	if _, err := os.Stat(p); err == nil {
 		return p
 	}
@@ -177,6 +178,6 @@ func versionBranch(version string) string {
 
 // EnsureShim is a no-op on Windows: the php.bat shim is written by SetCurrent
 // and does not yet resolve .php-version files.
-func EnsureShim(base string) error {
+func EnsureShim(h *home.Dir) error {
 	return nil
 }

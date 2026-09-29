@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
 )
 
 const (
@@ -145,7 +146,7 @@ func isInstallable(pkg string, args ...string) bool {
 	return exec.Command(args[0], args[1:]...).Run() == nil
 }
 
-func LinuxInstall(base, ver string) error {
+func LinuxInstall(h *home.Dir, ver string) error {
 	pm := detectPackageManager()
 	if pm == nil {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
@@ -168,7 +169,7 @@ func LinuxInstall(base, ver string) error {
 
 	// pacman/zypper have no extPkg: pvm does not manage their extensions.
 	if pm.extPkg != nil {
-		if err := installExtensions(pm, base, ver, BaseExtensions); err != nil {
+		if err := installExtensions(pm, h, ver, BaseExtensions); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: %v. PHP works; pvm composer offers to install missing extensions when a project needs them.\n", err)
 		}
 	}
@@ -178,15 +179,10 @@ func LinuxInstall(base, ver string) error {
 		return fmt.Errorf("PHP binary not found at %s after installation", binPath)
 	}
 
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return h.SetBinary(ver, binPath)
 }
 
-func LinuxRemove(base, ver string) error {
+func LinuxRemove(h *home.Dir, ver string) error {
 	pm := detectPackageManager()
 	if pm == nil {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
@@ -198,7 +194,7 @@ func LinuxRemove(base, ver string) error {
 	// Extensions first, and quietly: some may never have been installed. The
 	// base ones are always included, for versions installed before pvm
 	// recorded its packages.
-	extras := readPackages(base, ver)
+	extras := h.Packages(ver)
 	if pm.extPkg != nil {
 		for _, ext := range BaseExtensions {
 			extras = append(extras, pm.extPkg(branch, ext))
@@ -231,7 +227,7 @@ func remiExtPkg(branch, ext string) string {
 
 // installExtensions installs the packages of exts one by one and records the
 // ones that succeed, so LinuxRemove removes them with the version.
-func installExtensions(pm *pkgManagerDef, base, ver string, exts []string) error {
+func installExtensions(pm *pkgManagerDef, h *home.Dir, ver string, exts []string) error {
 	if pm.extPkg == nil {
 		return fmt.Errorf("pvm cannot install PHP extensions with %s", pm.bin)
 	}
@@ -255,7 +251,7 @@ func installExtensions(pm *pkgManagerDef, base, ver string, exts []string) error
 		installed = append(installed, pkg)
 	}
 
-	if err := recordPackages(base, ver, installed); err != nil {
+	if err := h.AddPackages(ver, installed); err != nil {
 		return fmt.Errorf("record installed extensions: %w", err)
 	}
 	if len(failed) > 0 {
@@ -265,10 +261,10 @@ func installExtensions(pm *pkgManagerDef, base, ver string, exts []string) error
 }
 
 // LinuxEnsureExtensions installs the packages of exts for an installed version.
-func LinuxEnsureExtensions(base, ver string, exts []string) error {
+func LinuxEnsureExtensions(h *home.Dir, ver string, exts []string) error {
 	pm := detectPackageManager()
 	if pm == nil {
 		return fmt.Errorf("no supported package manager found (apt, dnf, yum, pacman, zypper)")
 	}
-	return installExtensions(pm, base, ver, exts)
+	return installExtensions(pm, h, ver, exts)
 }

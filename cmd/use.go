@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/project"
 	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/rejmann/pvm/internal/system"
@@ -36,7 +36,7 @@ func runUse(cmd *cobra.Command, args []string) error {
 
 	return useVersion(
 		arg,
-		phpfs.NewManager(baseDir()),
+		home.Default(),
 		phpLTSResolver{ctx: cmd.Context()},
 		cmd.OutOrStdout(),
 	)
@@ -44,7 +44,7 @@ func runUse(cmd *cobra.Command, args []string) error {
 
 func useVersion(
 	arg string,
-	m *phpfs.Manager,
+	h *home.Dir,
 	r version.Resolver,
 	out io.Writer,
 ) error {
@@ -57,7 +57,7 @@ func useVersion(
 		return fmt.Errorf("invalid version %q: %w", concrete, err)
 	}
 
-	if !m.VersionInstalled(concrete) {
+	if !h.Installed(concrete) {
 		label := concrete
 		if wasAlias {
 			label = fmt.Sprintf("%s (lts)", concrete)
@@ -65,12 +65,12 @@ func useVersion(
 		return fmt.Errorf("%s not installed — run: pvm install %s", label, arg)
 	}
 
-	binPath, err := m.GetVersionBinary(concrete)
+	binPath, err := h.Binary(concrete)
 	if err != nil {
 		return err
 	}
 
-	if err := symlink.SetCurrent(m.Base, concrete, binPath); err != nil {
+	if err := symlink.SetCurrent(h, concrete, binPath); err != nil {
 		return fmt.Errorf("activate PHP %s: %w", concrete, err)
 	}
 
@@ -79,7 +79,7 @@ func useVersion(
 		label = fmt.Sprintf("%s (lts)", concrete)
 	}
 	fmt.Fprintf(out, "Now using PHP %s.\n", label)
-	printPathHint(out, m.Base)
+	printPathHint(out, h)
 	return nil
 }
 
@@ -102,8 +102,8 @@ func useArg(args []string, dir string, out io.Writer) (string, error) {
 	return v, nil
 }
 
-func printPathHint(out io.Writer, base string) {
-	managed := symlink.ShimDir(base)
+func printPathHint(out io.Writer, h *home.Dir) {
+	managed := h.ShimDir()
 
 	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
 		if strings.EqualFold(p, managed) {

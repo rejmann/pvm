@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/php"
 )
 
-func WindowsInstall(base, ver string) error {
+func WindowsInstall(h *home.Dir, ver string) error {
 	branch := majorMinor(ver)
 
 	fullVer, err := resolveFullVersion(ver, branch)
@@ -20,7 +21,7 @@ func WindowsInstall(base, ver string) error {
 		return fmt.Errorf("resolve PHP %s: %w", ver, err)
 	}
 
-	installDir := phpInstallDir(base, branch)
+	installDir := h.PHPDir(branch)
 	fmt.Printf("Downloading PHP %s to %s...\n", fullVer, installDir)
 
 	if err := downloadAndExtractPHP(fullVer, installDir); err != nil {
@@ -35,17 +36,12 @@ func WindowsInstall(base, ver string) error {
 		return fmt.Errorf("write php.ini: %w", err)
 	}
 
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return h.SetBinary(ver, binPath)
 }
 
-func WindowsRemove(base, ver string) error {
+func WindowsRemove(h *home.Dir, ver string) error {
 	branch := majorMinor(ver)
-	installDir := phpInstallDir(base, branch)
+	installDir := h.PHPDir(branch)
 
 	if _, err := os.Stat(installDir); os.IsNotExist(err) {
 		return fmt.Errorf("PHP %s is not installed", ver)
@@ -64,13 +60,7 @@ func resolveFullVersion(ver, branch string) (string, error) {
 	return php.LatestPatch(context.Background(), branch)
 }
 
-// phpInstallDir is the isolated directory for a PHP branch under pvm home.
-// e.g. %LOCALAPPDATA%\pvm\php\8.3
-func phpInstallDir(base, branch string) string {
-	return filepath.Join(base, "php", branch)
-}
-
 // WindowsEnsureExtensions enables exts in the php.ini of an installed version.
-func WindowsEnsureExtensions(base, ver string, exts []string) error {
-	return enableIniExtensions(phpInstallDir(base, majorMinor(ver)), exts)
+func WindowsEnsureExtensions(h *home.Dir, ver string, exts []string) error {
+	return enableIniExtensions(h.PHPDir(majorMinor(ver)), exts)
 }

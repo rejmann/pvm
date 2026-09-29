@@ -15,12 +15,8 @@ type branchCache struct {
 	Branches []Branch  `json:"branches"`
 }
 
-func availableCacheFile(cacheDir string) string {
-	return filepath.Join(cacheDir, "cache", "available.json")
-}
-
-func readCache(cacheDir string) ([]Branch, bool) {
-	data, err := os.ReadFile(availableCacheFile(cacheDir))
+func readCache(path string) ([]Branch, bool) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, false
 	}
@@ -36,8 +32,7 @@ func readCache(cacheDir string) ([]Branch, bool) {
 	return c.Branches, true
 }
 
-func writeCache(cacheDir string, branches []Branch) error {
-	path := availableCacheFile(cacheDir)
+func writeCache(path string, branches []Branch) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -51,9 +46,10 @@ func writeCache(cacheDir string, branches []Branch) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func FetchAllBranchesCached(ctx context.Context, cacheDir string, forceRefresh bool) ([]Branch, error) {
+// FetchAllBranchesCached is FetchAllBranches, cached for a day in cacheFile.
+func FetchAllBranchesCached(ctx context.Context, cacheFile string, forceRefresh bool) ([]Branch, error) {
 	if !forceRefresh {
-		if branches, ok := readCache(cacheDir); ok {
+		if branches, ok := readCache(cacheFile); ok {
 			return branches, nil
 		}
 	}
@@ -61,6 +57,6 @@ func FetchAllBranchesCached(ctx context.Context, cacheDir string, forceRefresh b
 	if err != nil {
 		return nil, err
 	}
-	_ = writeCache(cacheDir, branches)
+	_ = writeCache(cacheFile, branches)
 	return branches, nil
 }

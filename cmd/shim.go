@@ -8,8 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
-	"github.com/rejmann/pvm/internal/symlink"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -32,9 +31,9 @@ func runShim(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	m := phpfs.NewManager(baseDir())
+	h := home.Default()
 
-	bin, err := shimTarget(m, dir, os.Getenv(envVersion), os.Getenv("PATH"))
+	bin, err := shimTarget(h, dir, os.Getenv(envVersion), os.Getenv("PATH"))
 	if err != nil {
 		return err
 	}
@@ -43,8 +42,8 @@ func runShim(cmd *cobra.Command, args []string) error {
 
 // shimTarget returns the php binary the shim should run. When no version is
 // selected anywhere, it falls back to the first php on PATH outside pvm.
-func shimTarget(m *phpfs.Manager, dir, env, path string) (string, error) {
-	a, err := resolveActive(m, dir, env)
+func shimTarget(h *home.Dir, dir, env, path string) (string, error) {
+	a, err := resolveActive(h, dir, env)
 	if err == nil {
 		return a.Binary, nil
 	}
@@ -52,7 +51,7 @@ func shimTarget(m *phpfs.Manager, dir, env, path string) (string, error) {
 		return "", err
 	}
 
-	if bin := lookPathExcluding("php", path, symlink.ShimDir(m.Base)); bin != "" {
+	if bin := lookPathExcluding("php", path, h.ShimDir()); bin != "" {
 		return bin, nil
 	}
 	return "", fmt.Errorf("%w and no system php found — run: pvm use <version>", err)

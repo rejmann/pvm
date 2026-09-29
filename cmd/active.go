@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/project"
-	"github.com/rejmann/pvm/internal/symlink"
 )
 
 // envVersion overrides every other source of the active version.
@@ -23,19 +22,19 @@ type active struct {
 
 // resolveActive picks the PHP version for dir, in order of precedence:
 // $PVM_VERSION, the nearest .php-version, then the global current-version.
-func resolveActive(m *phpfs.Manager, dir, env string) (active, error) {
-	requested, source, err := requestedVersion(m, dir, env)
+func resolveActive(h *home.Dir, dir, env string) (active, error) {
+	requested, source, err := requestedVersion(h, dir, env)
 	if err != nil {
 		return active{}, err
 	}
 
-	installed, ok := m.MatchInstalled(requested)
+	installed, ok := h.Match(requested)
 	if !ok {
 		return active{}, fmt.Errorf("PHP %s (set by %s) is not installed — run: pvm install %s",
 			requested, source, requested)
 	}
 
-	bin, err := m.GetVersionBinary(installed)
+	bin, err := h.Binary(installed)
 	if err != nil {
 		return active{}, err
 	}
@@ -43,7 +42,7 @@ func resolveActive(m *phpfs.Manager, dir, env string) (active, error) {
 	return active{Version: installed, Binary: bin, Source: source}, nil
 }
 
-func requestedVersion(m *phpfs.Manager, dir, env string) (version, source string, err error) {
+func requestedVersion(h *home.Dir, dir, env string) (version, source string, err error) {
 	if env != "" {
 		return env, envVersion + " environment variable", nil
 	}
@@ -56,11 +55,11 @@ func requestedVersion(m *phpfs.Manager, dir, env string) (version, source string
 		return "", "", err
 	}
 
-	v, err = symlink.GetCurrent(m.Base)
+	v, err = h.Current()
 	if err == nil {
 		return v, "global", nil
 	}
-	if errors.Is(err, symlink.ErrNoCurrentVersion) {
+	if errors.Is(err, home.ErrNoCurrentVersion) {
 		return "", "", ErrNoActiveVersion
 	}
 	return "", "", err

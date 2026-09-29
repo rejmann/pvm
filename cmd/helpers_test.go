@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 )
 
 type fakeResolver struct {
@@ -25,27 +25,24 @@ func (f failResolver) ResolveLTS() (string, error) {
 	return "", errors.New("unexpected")
 }
 
-func newManager(t *testing.T) *phpfs.Manager {
+func newHome(t *testing.T) *home.Dir {
 	t.Helper()
-	m := phpfs.NewManager(t.TempDir())
-	if err := m.EnsurebaseDir(); err != nil {
+	h := home.New(t.TempDir())
+	if err := h.Init(); err != nil {
 		t.Fatal(err)
 	}
-	return m
+	return h
 }
 
-// fakeInstall registers version v in m the same way the real installers do:
-// a versions/<v>/binary file pointing at an existing executable.
-func fakeInstall(t *testing.T, m *phpfs.Manager, v string) {
+// fakeInstall registers version v in h the same way the real installers do:
+// a recorded binary pointing at an existing executable.
+func fakeInstall(t *testing.T, h *home.Dir, v string) {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "php"+v)
 	if err := os.WriteFile(bin, nil, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(m.VersionDir(v), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(m.VersionDir(v), "binary"), []byte(bin), 0644); err != nil {
+	if err := h.SetBinary(v, bin); err != nil {
 		t.Fatal(err)
 	}
 }

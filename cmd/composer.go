@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	"github.com/rejmann/pvm/internal/composer"
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -56,9 +56,9 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	base := baseDir()
+	h := home.Default()
 
-	a, err := resolveActive(phpfs.NewManager(base), dir, os.Getenv(envVersion))
+	a, err := resolveActive(h, dir, os.Getenv(envVersion))
 	if errors.Is(err, ErrNoActiveVersion) {
 		return fmt.Errorf("%w — run: pvm use <version>", err)
 	}
@@ -72,18 +72,18 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	}
 	interactive := isTerminal(os.Stdin)
 	if !info.Zip && !hasArchiveTool(os.Getenv("PATH")) {
-		offerExtensions(base, a.Version, []string{"zip"}, "which Composer needs to extract packages",
+		offerExtensions(h, a.Version, []string{"zip"}, "which Composer needs to extract packages",
 			interactive, os.Stdin, os.Stderr)
 	}
 
-	phar, err := composer.New().Ensure(cmd.Context(), base, a.Version, info.Version, func(r composer.Release) {
+	phar, err := composer.New().Ensure(cmd.Context(), h.ComposerDir(), a.Version, info.Version, func(r composer.Release) {
 		fmt.Fprintf(os.Stderr, "Downloading Composer %s for PHP %s...\n", r.Version, a.Version)
 	})
 	if err != nil {
 		return err
 	}
 
-	env := composer.Env(base, a.Version, os.Getenv)
+	env := composer.Env(h.ComposerDir(), a.Version, os.Getenv)
 	env[envVersion] = a.Version
 	for k, v := range env {
 		if err := os.Setenv(k, v); err != nil {
@@ -103,7 +103,7 @@ func runComposer(cmd *cobra.Command, args []string) error {
 	// Composer may exit 0 even so: Symfony Flex reports a failed update after
 	// create-project without failing the command.
 	if len(out.missing) > 0 &&
-		offerExtensions(base, a.Version, out.missing, "which this project needs", interactive, os.Stdin, os.Stderr) {
+		offerExtensions(h, a.Version, out.missing, "which this project needs", interactive, os.Stdin, os.Stderr) {
 		// Composer only creates a project in a new or empty directory, so
 		// emptying it restores the state the command started from.
 		if out.project != "" {
@@ -165,7 +165,7 @@ func hasArchiveTool(path string) bool {
 // offerExtensions asks to install exts for version and reports whether they
 // were installed. It never fails the command: at worst Composer fails as it
 // would have without pvm.
-func offerExtensions(base, version string, exts []string, why string, interactive bool, in io.Reader, out io.Writer) bool {
+func offerExtensions(h *home.Dir, version string, exts []string, why string, interactive bool, in io.Reader, out io.Writer) bool {
 	what := "the " + exts[0] + " extension"
 	if len(exts) > 1 {
 		what = "the " + strings.Join(exts, ", ") + " extensions"
@@ -178,7 +178,7 @@ func offerExtensions(base, version string, exts []string, why string, interactiv
 	if !confirm(in, out, "Install now? [y/N] ") {
 		return false
 	}
-	if err := installExtensions(base, version, exts); err != nil {
+	if err := installExtensions(h, version, exts); err != nil {
 		fmt.Fprintf(out, "Warning: %v\n", err)
 		return false
 	}

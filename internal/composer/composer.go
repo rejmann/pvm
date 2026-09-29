@@ -1,7 +1,7 @@
 // Package composer gives each pvm-managed PHP version its own composer.phar
 // and Composer home, downloaded on demand from getcomposer.org.
 //
-// Layout under <pvm-home>/composer:
+// Layout under root, the Composer directory of the pvm home:
 //
 //	cache/                       COMPOSER_CACHE_DIR, shared: downloads don't depend on PHP
 //	php/<version>/composer.phar  the Composer this PHP version runs
@@ -52,37 +52,33 @@ var (
 	devKey []byte
 )
 
-func dir(base string) string {
-	return filepath.Join(base, "composer")
-}
-
 // VersionDir holds everything Composer keeps for one pvm-managed PHP version.
-func VersionDir(base, phpVersion string) string {
-	return filepath.Join(dir(base), "php", phpVersion)
+func VersionDir(root, phpVersion string) string {
+	return filepath.Join(root, "php", phpVersion)
 }
 
 // PharPath is the composer.phar that PHP phpVersion (as installed by pvm, e.g. "8.3") runs.
-func PharPath(base, phpVersion string) string {
-	return filepath.Join(VersionDir(base, phpVersion), PharName)
+func PharPath(root, phpVersion string) string {
+	return filepath.Join(VersionDir(root, phpVersion), PharName)
 }
 
-func homeDir(base, phpVersion string) string {
-	return filepath.Join(VersionDir(base, phpVersion), "home")
+func homeDir(root, phpVersion string) string {
+	return filepath.Join(VersionDir(root, phpVersion), "home")
 }
 
 // Remove deletes the Composer of a PHP version; called when pvm removes it.
-func Remove(base, phpVersion string) error {
-	return os.RemoveAll(VersionDir(base, phpVersion))
+func Remove(root, phpVersion string) error {
+	return os.RemoveAll(VersionDir(root, phpVersion))
 }
 
 // Env returns the variables that keep Composer's home (per PHP version) and
 // cache under the pvm home instead of the user's global directories. A
 // variable the user already set (getenv returns non-empty) is left alone.
-func Env(base, phpVersion string, getenv func(string) string) map[string]string {
+func Env(root, phpVersion string, getenv func(string) string) map[string]string {
 	env := map[string]string{}
 	for name, path := range map[string]string{
-		"COMPOSER_HOME":      homeDir(base, phpVersion),
-		"COMPOSER_CACHE_DIR": filepath.Join(dir(base), "cache"),
+		"COMPOSER_HOME":      homeDir(root, phpVersion),
+		"COMPOSER_CACHE_DIR": filepath.Join(root, "cache"),
 	} {
 		if getenv(name) == "" {
 			env[name] = path
@@ -145,8 +141,8 @@ func New() *Downloader {
 // for phpExact is downloaded, its signature verified, and the Composer home
 // prepared; onDownload, if not nil, is told which release before the download.
 // An existing phar is never replaced: updating it is `composer self-update`'s job.
-func (d *Downloader) Ensure(ctx context.Context, base, phpVersion, phpExact string, onDownload func(Release)) (string, error) {
-	path := PharPath(base, phpVersion)
+func (d *Downloader) Ensure(ctx context.Context, root, phpVersion, phpExact string, onDownload func(Release)) (string, error) {
+	path := PharPath(root, phpVersion)
 	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
 		return path, nil
 	}
@@ -174,7 +170,7 @@ func (d *Downloader) Ensure(ctx context.Context, base, phpVersion, phpExact stri
 		return "", err
 	}
 
-	if err := writeKeys(homeDir(base, phpVersion)); err != nil {
+	if err := writeKeys(homeDir(root, phpVersion)); err != nil {
 		return "", fmt.Errorf("prepare Composer home: %w", err)
 	}
 	if err := writeAtomic(path, phar, 0755); err != nil {

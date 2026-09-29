@@ -10,9 +10,9 @@ import (
 )
 
 func TestRunTarget(t *testing.T) {
-	m := newManager(t)
-	fakeInstall(t, m, "8.2")
-	fakeInstall(t, m, "8.5.1")
+	h := newHome(t)
+	fakeInstall(t, h, "8.2")
+	fakeInstall(t, h, "8.5.1")
 
 	tests := []struct {
 		name          string
@@ -30,7 +30,7 @@ func TestRunTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			installed, bin, err := runTarget(tt.arg, m, tt.r)
+			installed, bin, err := runTarget(tt.arg, h, tt.r)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
@@ -40,7 +40,7 @@ func TestRunTarget(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantBin, _ := m.GetVersionBinary(tt.wantInstalled)
+			wantBin, _ := h.Binary(tt.wantInstalled)
 			if installed != tt.wantInstalled || bin != wantBin {
 				t.Errorf("runTarget = (%q, %q), want (%q, %q)", installed, bin, tt.wantInstalled, wantBin)
 			}
@@ -49,7 +49,7 @@ func TestRunTarget(t *testing.T) {
 
 	t.Run("resolver error", func(t *testing.T) {
 		boom := errors.New("offline")
-		if _, _, err := runTarget("lts", m, fakeResolver{err: boom}); !errors.Is(err, boom) {
+		if _, _, err := runTarget("lts", h, fakeResolver{err: boom}); !errors.Is(err, boom) {
 			t.Fatalf("error = %v, want wrapped %v", err, boom)
 		}
 	})
@@ -104,10 +104,10 @@ func TestSplitRunArgs(t *testing.T) {
 }
 
 func TestRunResolveUsesActiveVersion(t *testing.T) {
-	m := newManager(t)
-	fakeInstall(t, m, "8.2")
-	fakeInstall(t, m, "8.5")
-	setGlobal(t, m.Base, "8.5")
+	h := newHome(t)
+	fakeInstall(t, h, "8.2")
+	fakeInstall(t, h, "8.5")
+	setGlobal(t, h, "8.5")
 	project := t.TempDir()
 	writePHPVersion(t, project, "8.2")
 
@@ -121,11 +121,11 @@ func TestRunResolveUsesActiveVersion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			installed, bin, err := runResolve(tt.versionArg, m, failResolver{t}, tt.dir, tt.env)
+			installed, bin, err := runResolve(tt.versionArg, h, failResolver{t}, tt.dir, tt.env)
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantBin, _ := m.GetVersionBinary(tt.want)
+			wantBin, _ := h.Binary(tt.want)
 			if installed != tt.want || bin != wantBin {
 				t.Errorf("runResolve = (%q, %q), want (%q, %q)", installed, bin, tt.want, wantBin)
 			}
@@ -133,7 +133,7 @@ func TestRunResolveUsesActiveVersion(t *testing.T) {
 	}
 
 	t.Run("nothing selected", func(t *testing.T) {
-		_, _, err := runResolve("", newManager(t), failResolver{t}, t.TempDir(), "")
+		_, _, err := runResolve("", newHome(t), failResolver{t}, t.TempDir(), "")
 		if !errors.Is(err, ErrNoActiveVersion) || !strings.Contains(err.Error(), "pvm run 8.3") {
 			t.Fatalf("error = %v", err)
 		}

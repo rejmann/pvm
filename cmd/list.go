@@ -5,10 +5,9 @@ import (
 	"io"
 
 	"github.com/rejmann/pvm/internal/php"
-	"github.com/rejmann/pvm/internal/symlink"
 	"github.com/spf13/cobra"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 )
 
 var ListCmd = &cobra.Command{
@@ -20,16 +19,16 @@ var ListCmd = &cobra.Command{
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	return listVersions(phpfs.NewManager(baseDir()), cmd.OutOrStdout())
+	return listVersions(home.Default(), cmd.OutOrStdout())
 }
 
-func listVersions(m *phpfs.Manager, out io.Writer) error {
-	managed, err := m.InstalledVersions()
+func listVersions(h *home.Dir, out io.Writer) error {
+	managed, err := h.Versions()
 	if err != nil {
 		return fmt.Errorf("read installed versions: %w", err)
 	}
 
-	current, _ := symlink.GetCurrent(m.Base)
+	current, _ := h.Current()
 
 	managedSet := map[string]bool{}
 	for _, v := range managed {

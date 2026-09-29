@@ -8,11 +8,11 @@ import (
 )
 
 func TestResolveActive(t *testing.T) {
-	m := newManager(t)
+	h := newHome(t)
 	for _, v := range []string{"7.4", "8.2", "8.3.30"} {
-		fakeInstall(t, m, v)
+		fakeInstall(t, h, v)
 	}
-	setGlobal(t, m.Base, "7.4")
+	setGlobal(t, h, "7.4")
 
 	project := t.TempDir()
 	writePHPVersion(t, project, "8.2")
@@ -34,14 +34,14 @@ func TestResolveActive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := resolveActive(m, tt.dir, tt.env)
+			a, err := resolveActive(h, tt.dir, tt.env)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if a.Version != tt.wantVersion || a.Source != tt.wantSource {
 				t.Errorf("resolveActive = {%s, %s}, want {%s, %s}", a.Version, a.Source, tt.wantVersion, tt.wantSource)
 			}
-			wantBin, _ := m.GetVersionBinary(tt.wantVersion)
+			wantBin, _ := h.Binary(tt.wantVersion)
 			if a.Binary != wantBin {
 				t.Errorf("Binary = %q, want %q", a.Binary, wantBin)
 			}
@@ -51,19 +51,19 @@ func TestResolveActive(t *testing.T) {
 
 func TestResolveActiveErrors(t *testing.T) {
 	t.Run("nothing selected", func(t *testing.T) {
-		m := newManager(t)
-		if _, err := resolveActive(m, t.TempDir(), ""); !errors.Is(err, ErrNoActiveVersion) {
+		h := newHome(t)
+		if _, err := resolveActive(h, t.TempDir(), ""); !errors.Is(err, ErrNoActiveVersion) {
 			t.Fatalf("error = %v, want ErrNoActiveVersion", err)
 		}
 	})
 
 	t.Run("project version not installed", func(t *testing.T) {
-		m := newManager(t)
-		fakeInstall(t, m, "8.3")
+		h := newHome(t)
+		fakeInstall(t, h, "8.3")
 		dir := t.TempDir()
 		writePHPVersion(t, dir, "8.1")
 
-		_, err := resolveActive(m, dir, "")
+		_, err := resolveActive(h, dir, "")
 		if err == nil || !strings.Contains(err.Error(), "PHP 8.1 (set by "+filepath.Join(dir, ".php-version")+") is not installed") {
 			t.Fatalf("error = %v", err)
 		}

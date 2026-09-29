@@ -29,15 +29,15 @@ func TestUseVersionErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := newManager(t)
-			fakeInstall(t, m, "8.2")
+			h := newHome(t)
+			fakeInstall(t, h, "8.2")
 
 			var r version.Resolver = failResolver{t}
 			if tt.r != nil {
 				r = tt.r
 			}
 
-			err := useVersion(tt.arg, m, r, &bytes.Buffer{})
+			err := useVersion(tt.arg, h, r, &bytes.Buffer{})
 			if err == nil {
 				t.Fatal("expected an error")
 			}

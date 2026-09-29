@@ -8,7 +8,7 @@ import (
 	"github.com/rejmann/pvm/internal/php"
 	"github.com/spf13/cobra"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 )
 
 var AvailableCmd = &cobra.Command{
@@ -26,11 +26,11 @@ func init() {
 
 func runAvailable(cmd *cobra.Command, args []string) error {
 	refresh, _ := cmd.Flags().GetBool("refresh")
-	return printAvailable(cmd.Context(), phpfs.NewManager(baseDir()), refresh, cmd.OutOrStdout())
+	return printAvailable(cmd.Context(), home.Default(), refresh, cmd.OutOrStdout())
 }
 
-func printAvailable(ctx context.Context, m *phpfs.Manager, forceRefresh bool, out io.Writer) error {
-	branches, err := php.FetchAllBranchesCached(ctx, m.Base, forceRefresh)
+func printAvailable(ctx context.Context, h *home.Dir, forceRefresh bool, out io.Writer) error {
+	branches, err := php.FetchAllBranchesCached(ctx, h.AvailableCache(), forceRefresh)
 	if err != nil {
 		return err
 	}

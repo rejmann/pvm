@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	phpfs "github.com/rejmann/pvm/internal/fs"
+	"github.com/rejmann/pvm/internal/home"
 	"github.com/spf13/cobra"
 )
 
@@ -22,11 +22,11 @@ func runWhich(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return printWhich(phpfs.NewManager(baseDir()), dir, os.Getenv(envVersion), cmd.OutOrStdout())
+	return printWhich(home.Default(), dir, os.Getenv(envVersion), cmd.OutOrStdout())
 }
 
-func printWhich(m *phpfs.Manager, dir, env string, out io.Writer) error {
-	a, err := resolveActive(m, dir, env)
+func printWhich(h *home.Dir, dir, env string, out io.Writer) error {
+	a, err := resolveActive(h, dir, env)
 	if errors.Is(err, ErrNoActiveVersion) {
 		return fmt.Errorf("%w — run: pvm use <version>", err)
 	}

@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rejmann/pvm/internal/home"
 )
 
-func BrewInstall(base, ver string) error {
+func BrewInstall(h *home.Dir, ver string) error {
 	branch := majorMinor(ver)
 	pkg := "php@" + branch
 
@@ -26,15 +28,10 @@ func BrewInstall(base, ver string) error {
 		return err
 	}
 
-	verDir := filepath.Join(base, "versions", ver)
-	if err := os.MkdirAll(verDir, 0755); err != nil {
-		return fmt.Errorf("create version directory: %w", err)
-	}
-
-	return os.WriteFile(filepath.Join(verDir, "binary"), []byte(binPath), 0644)
+	return h.SetBinary(ver, binPath)
 }
 
-func BrewRemove(base, ver string) error {
+func BrewRemove(h *home.Dir, ver string) error {
 	branch := majorMinor(ver)
 	cmd := exec.Command("brew", "uninstall", "php@"+branch)
 	cmd.Stdout = os.Stdout
