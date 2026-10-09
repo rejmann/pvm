@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -59,15 +60,29 @@ func runSelfRemove(cmd *cobra.Command, args []string) error {
 		RemoveIntegration: shim.New(cmd.OutOrStdout(), cmd.ErrOrStderr()).RemoveIntegration,
 		RemoveBinary:      selfupdate.RemoveBinary,
 		Confirm: func(prompt string) bool {
-			return confirm(cmd.InOrStdin(), cmd.OutOrStdout(), prompt)
+			return confirm(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), prompt)
 		},
 	}
 	return selfremove.Run(home.Default(), exe, withPHP, yes, ops, cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
-func confirm(in io.Reader, out io.Writer, prompt string) bool {
+// confirm asks a yes/no question. The answer is read in a goroutine, so a
+// cancelled ctx (Ctrl+C) answers no instead of waiting for a line.
+func confirm(ctx context.Context, in io.Reader, out io.Writer, prompt string) bool {
 	fmt.Fprint(out, prompt)
-	line, _ := bufio.NewReader(in).ReadString('\n')
+	answer := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(in).ReadString('\n')
+		answer <- line
+	}()
+
+	var line string
+	select {
+	case line = <-answer:
+	case <-ctx.Done():
+		fmt.Fprintln(out)
+		return false
+	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true

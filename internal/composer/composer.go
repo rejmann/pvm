@@ -30,7 +30,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/rejmann/pvm/internal/progress"
 	"github.com/rejmann/pvm/internal/version"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -126,6 +128,7 @@ type Downloader struct {
 	BaseURL   string
 	PublicKey []byte // PEM
 	Client    *http.Client
+	Progress  io.Writer // where the phar download shows its progress; nil for none
 }
 
 func New() *Downloader {
@@ -150,7 +153,7 @@ func (d *Downloader) Ensure(ctx context.Context, root, phpVersion, phpExact stri
 	var releases struct {
 		Stable []Release `json:"stable"`
 	}
-	body, err := d.get(ctx, d.BaseURL+"/versions", 1<<20)
+	body, err := d.get(ctx, d.BaseURL+"/versions", 1<<20, nil)
 	if err != nil {
 		return "", fmt.Errorf("list Composer releases: %w", err)
 	}
@@ -179,18 +182,27 @@ func (d *Downloader) Ensure(ctx context.Context, root, phpVersion, phpExact stri
 	return path, nil
 }
 
-// download fetches release r and verifies its RSA-SHA384 signature, as
-// `composer self-update` does.
+// download fetches release r and its signature, both at once, and verifies
+// the RSA-SHA384 signature, as `composer self-update` does.
 func (d *Downloader) download(ctx context.Context, r Release) ([]byte, error) {
 	url := d.BaseURL + r.Path
 
-	phar, err := d.get(ctx, url, maxPharSize)
-	if err != nil {
-		return nil, fmt.Errorf("download Composer %s: %w", r.Version, err)
-	}
-	sigJSON, err := d.get(ctx, url+".sig", 1<<12)
-	if err != nil {
-		return nil, fmt.Errorf("download Composer %s signature: %w", r.Version, err)
+	var phar, sigJSON []byte
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		if phar, err = d.get(ctx, url, maxPharSize, d.Progress); err != nil {
+			return fmt.Errorf("download Composer %s: %w", r.Version, err)
+		}
+		return nil
+	})
+	g.Go(func() (err error) {
+		if sigJSON, err = d.get(ctx, url+".sig", 1<<12, nil); err != nil {
+			return fmt.Errorf("download Composer %s signature: %w", r.Version, err)
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	if err := verify(phar, sigJSON, d.PublicKey); err != nil {
 		return nil, fmt.Errorf("Composer %s: %w", r.Version, err)
@@ -245,7 +257,9 @@ func writeKeys(home string) error {
 	return nil
 }
 
-func (d *Downloader) get(ctx context.Context, url string, limit int64) ([]byte, error) {
+// get fetches url, refusing a body larger than limit; show, if not nil, is
+// where the download shows how far it is.
+func (d *Downloader) get(ctx context.Context, url string, limit int64, show io.Writer) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -259,7 +273,9 @@ func (d *Downloader) get(ctx context.Context, url string, limit int64) ([]byte, 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	r, stop := progress.Track(show, resp.Body, resp.ContentLength)
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	stop()
 	if err != nil {
 		return nil, err
 	}

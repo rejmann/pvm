@@ -1,6 +1,7 @@
 package pvm
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ func TestInstall(t *testing.T) {
 		m, inst, _ := newTestManager(t)
 		started := false
 
-		if err := m.Install(Target{Arg: "8.3", Version: "8.3"}, func() { started = true }); err != nil {
+		if err := m.Install(context.Background(), Target{Arg: "8.3", Version: "8.3"}, func() { started = true }); err != nil {
 			t.Fatal(err)
 		}
 		if !started || strings.Join(inst.installed, ",") != "8.3" || !m.Home.Installed("8.3") {
@@ -23,7 +24,7 @@ func TestInstall(t *testing.T) {
 		m, inst, _ := newTestManager(t)
 		fakeInstall(t, m.Home, "8.4")
 
-		err := m.Install(Target{Arg: "lts", Version: "8.4", Alias: true}, func() { t.Error("must not start") })
+		err := m.Install(context.Background(), Target{Arg: "lts", Version: "8.4", Alias: true}, func() { t.Error("must not start") })
 		if err == nil || !strings.Contains(err.Error(), "8.4 (lts) already installed") {
 			t.Fatalf("error = %v", err)
 		}
@@ -37,7 +38,7 @@ func TestInstall(t *testing.T) {
 		boom := errors.New("apt failed")
 		inst.err = boom
 
-		if err := m.Install(Target{Version: "8.3"}, nil); !errors.Is(err, boom) {
+		if err := m.Install(context.Background(), Target{Version: "8.3"}, nil); !errors.Is(err, boom) {
 			t.Fatalf("error = %v, want wrapped %v", err, boom)
 		}
 	})

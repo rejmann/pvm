@@ -7,6 +7,7 @@ import (
 
 	"github.com/rejmann/pvm/cmd/selfupgrade"
 	"github.com/rejmann/pvm/internal/home"
+	"github.com/rejmann/pvm/internal/progress"
 	"github.com/rejmann/pvm/internal/selfupdate"
 	"github.com/spf13/cobra"
 )
@@ -57,7 +58,9 @@ func runSelfUpgrade(cmd *cobra.Command, args []string, current string) error {
 
 	h := home.Default()
 	out := cmd.OutOrStdout()
-	now, err := selfupgrade.Run(cmd.Context(), selfupdate.New(), exe, current, tag, check, selfupgrade.FallbackDir(h), out)
+	u := selfupdate.New()
+	u.Progress = progress.Terminal(out)
+	now, err := selfupgrade.Run(cmd.Context(), u, exe, current, tag, check, selfupgrade.FallbackDir(h), out)
 	if err != nil || now == exe {
 		return err
 	}

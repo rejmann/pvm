@@ -3,6 +3,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -26,8 +27,9 @@ func New(stdout, stderr io.Writer) *System {
 	return &System{Stdout: stdout, Stderr: stderr}
 }
 
-// Install runs brew install php@X.Y and records its binary.
-func (s *System) Install(h *home.Dir, ver string) error {
+// Install runs brew install php@X.Y and records its binary. Ctrl+C reaches
+// brew directly, so the context is not needed.
+func (s *System) Install(_ context.Context, h *home.Dir, ver string) error {
 	branch := version.Branch(ver)
 	pkg := "php@" + branch
 

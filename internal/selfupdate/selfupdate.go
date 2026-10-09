@@ -18,6 +18,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/rejmann/pvm/internal/progress"
 )
 
 const (
@@ -36,6 +38,7 @@ type Updater struct {
 	Client      *http.Client
 	GOOS        string
 	GOARCH      string
+	Progress    io.Writer // where Download shows its progress; nil for none
 }
 
 func New() *Updater {
@@ -117,7 +120,9 @@ func (u *Updater) Download(ctx context.Context, tag string) ([]byte, error) {
 		return nil, fmt.Errorf("download %s: unexpected status code: %d", asset, resp.StatusCode)
 	}
 
-	archive, err := io.ReadAll(io.LimitReader(resp.Body, maxBinarySize))
+	body, stop := progress.Track(u.Progress, resp.Body, resp.ContentLength)
+	archive, err := io.ReadAll(io.LimitReader(body, maxBinarySize))
+	stop()
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", asset, err)
 	}

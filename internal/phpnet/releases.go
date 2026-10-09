@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/rejmann/pvm/internal/version"
+	"golang.org/x/sync/errgroup"
 )
 
 const urlBase = "https://www.php.net/releases/index.php?json"
@@ -25,11 +26,6 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 		return nil, err
 	}
 
-	type result struct {
-		branches []Branch
-		err      error
-	}
-
 	var majors []string
 	for name, info := range supported {
 		if !info.Museum {
@@ -37,23 +33,23 @@ func FetchAllBranches(ctx context.Context) ([]Branch, error) {
 		}
 	}
 
-	ch := make(chan result, len(majors))
-	for _, major := range majors {
-		major := major
-		go func() {
+	// One request per major, all at once; the first error cancels the others.
+	perMajor := make([][]Branch, len(majors))
+	g, ctx := errgroup.WithContext(ctx)
+	for i, major := range majors {
+		g.Go(func() error {
 			branches, err := fetchMajorBranches(ctx, major, supported)
-			ch <- result{branches, err}
-		}()
+			perMajor[i] = branches
+			return err
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	var all []Branch
-	for range majors {
-		r := <-ch
-		if r.err != nil {
-			return nil, r.err
-		}
-
-		all = append(all, r.branches...)
+	for _, branches := range perMajor {
+		all = append(all, branches...)
 	}
 
 	if len(all) == 0 {

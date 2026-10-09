@@ -3,6 +3,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -184,7 +185,8 @@ func (s *System) sudo(args []string) error {
 }
 
 // Install installs PHP ver and the base extensions, and records its binary.
-func (s *System) Install(h *home.Dir, ver string) error {
+// Ctrl+C reaches the package manager directly, so the context is not needed.
+func (s *System) Install(_ context.Context, h *home.Dir, ver string) error {
 	pm := detectPackageManager()
 	if pm == nil {
 		return errNoPackageManager

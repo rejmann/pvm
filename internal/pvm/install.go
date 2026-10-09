@@ -1,10 +1,14 @@
 package pvm
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Install installs t unless it is already installed. onStart, if not nil, is
-// called once the checks pass, right before the (slow) installation.
-func (m *Manager) Install(t Target, onStart func()) error {
+// called once the checks pass, right before the (slow) installation, which
+// stops when ctx is cancelled.
+func (m *Manager) Install(ctx context.Context, t Target, onStart func()) error {
 	if err := m.Home.Init(); err != nil {
 		return fmt.Errorf("initialize \"pvm\" directory: %w", err)
 	}
@@ -16,7 +20,7 @@ func (m *Manager) Install(t Target, onStart func()) error {
 	if onStart != nil {
 		onStart()
 	}
-	if err := m.Installer.Install(m.Home, t.Version); err != nil {
+	if err := m.Installer.Install(ctx, m.Home, t.Version); err != nil {
 		return fmt.Errorf("install PHP %s: %w", t.Version, err)
 	}
 	return nil
