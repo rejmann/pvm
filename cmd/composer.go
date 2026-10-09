@@ -7,6 +7,7 @@ import (
 	"github.com/rejmann/pvm/internal/composer"
 	"github.com/rejmann/pvm/internal/installer"
 	"github.com/rejmann/pvm/internal/process"
+	"github.com/rejmann/pvm/internal/progress"
 	"github.com/rejmann/pvm/internal/pvm"
 	"github.com/rejmann/pvm/internal/sysphp"
 	"github.com/spf13/cobra"
@@ -52,10 +53,12 @@ func runComposer(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	m := newManager(cmd)
+	source := composer.New()
+	source.Progress = progress.Terminal(cmd.ErrOrStderr())
 
 	c := &pvm.Composer{
 		Manager:    m,
-		Source:     composer.New(),
+		Source:     source,
 		Extensions: installer.New(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 		Probe:      sysphp.Probe,
 		Exec:       process.Run,
@@ -64,7 +67,7 @@ func runComposer(cmd *cobra.Command, args []string) error {
 		Notices:    cmd.ErrOrStderr(),
 	}
 	if composercli.IsTerminal(os.Stdin) {
-		c.Confirm = func(prompt string) bool { return confirm(os.Stdin, cmd.ErrOrStderr(), prompt) }
+		c.Confirm = func(prompt string) bool { return confirm(cmd.Context(), os.Stdin, cmd.ErrOrStderr(), prompt) }
 	}
 
 	if composercli.ForceANSI(args, composercli.IsTerminal(os.Stdout), os.Getenv("NO_COLOR")) {

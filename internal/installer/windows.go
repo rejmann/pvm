@@ -14,25 +14,27 @@ import (
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/phpext"
 	"github.com/rejmann/pvm/internal/phpnet"
+	"github.com/rejmann/pvm/internal/progress"
 	"github.com/rejmann/pvm/internal/version"
 )
 
 // System installs the PHP builds from windows.php.net into the pvm home.
 type System struct {
 	Stdout, Stderr io.Writer // progress messages
+	Progress       io.Writer // where the download shows how far it is; nil for none
 }
 
 // New returns the installer for this system.
 func New(stdout, stderr io.Writer) *System {
-	return &System{Stdout: stdout, Stderr: stderr}
+	return &System{Stdout: stdout, Stderr: stderr, Progress: progress.Terminal(stdout)}
 }
 
 // Install downloads and extracts PHP ver, writes its php.ini and records
-// its binary.
-func (s *System) Install(h *home.Dir, ver string) error {
+// its binary. Cancelling ctx stops the download.
+func (s *System) Install(ctx context.Context, h *home.Dir, ver string) error {
 	branch := version.Branch(ver)
 
-	fullVer, err := resolveFullVersion(ver, branch)
+	fullVer, err := resolveFullVersion(ctx, ver, branch)
 	if err != nil {
 		return fmt.Errorf("resolve PHP %s: %w", ver, err)
 	}
@@ -40,7 +42,7 @@ func (s *System) Install(h *home.Dir, ver string) error {
 	installDir := h.PHPDir(branch)
 	fmt.Fprintf(s.Stdout, "Downloading PHP %s to %s...\n", fullVer, installDir)
 
-	if err := downloadAndExtractPHP(fullVer, installDir, s.Stdout); err != nil {
+	if err := downloadAndExtractPHP(ctx, fullVer, installDir, s.Stdout, s.Progress); err != nil {
 		return err
 	}
 
@@ -70,11 +72,11 @@ func (s *System) Remove(h *home.Dir, ver string) error {
 // resolveFullVersion returns the full patch version.
 // If ver already has three parts (e.g. "8.3.30"), it is returned as-is.
 // Otherwise (e.g. "8.3"), the latest patch is fetched from php.net.
-func resolveFullVersion(ver, branch string) (string, error) {
+func resolveFullVersion(ctx context.Context, ver, branch string) (string, error) {
 	if len(strings.Split(ver, ".")) == 3 {
 		return ver, nil
 	}
-	return phpnet.LatestPatch(context.Background(), branch)
+	return phpnet.LatestPatch(ctx, branch)
 }
 
 // AddExtensions enables exts in the php.ini of installed version ver.

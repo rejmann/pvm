@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -19,15 +20,15 @@ func newInstallCmd() *cobra.Command {
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	return installVersion(newManager(cmd), args[0], cmd.OutOrStdout())
+	return installVersion(cmd.Context(), newManager(cmd), args[0], cmd.OutOrStdout())
 }
 
-func installVersion(m *pvm.Manager, arg string, out io.Writer) error {
+func installVersion(ctx context.Context, m *pvm.Manager, arg string, out io.Writer) error {
 	t, err := m.Target(arg)
 	if err != nil {
 		return err
 	}
-	err = m.Install(t, func() { fmt.Fprintf(out, "Installing PHP %s...\n", t) })
+	err = m.Install(ctx, t, func() { fmt.Fprintf(out, "Installing PHP %s...\n", t) })
 	if err != nil {
 		return err
 	}

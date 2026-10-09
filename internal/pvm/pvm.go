@@ -5,6 +5,8 @@
 package pvm
 
 import (
+	"context"
+
 	"github.com/rejmann/pvm/internal/home"
 	"github.com/rejmann/pvm/internal/sysphp"
 	"github.com/rejmann/pvm/internal/version"
@@ -12,7 +14,7 @@ import (
 
 // Installer installs and removes PHP versions on this system.
 type Installer interface {
-	Install(h *home.Dir, ver string) error
+	Install(ctx context.Context, h *home.Dir, ver string) error
 	Remove(h *home.Dir, ver string) error
 }
 

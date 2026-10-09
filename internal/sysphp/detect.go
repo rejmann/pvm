@@ -2,14 +2,20 @@
 package sysphp
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/rejmann/pvm/internal/process"
 	"github.com/rejmann/pvm/internal/version"
 )
+
+// queryTimeout bounds each php run, so a binary that hangs cannot stall pvm.
+const queryTimeout = 10 * time.Second
 
 // PHP is a php binary found on the system, outside pvm.
 type PHP struct {
@@ -20,33 +26,36 @@ type PHP struct {
 // Detect finds the PHP versions installed on the system, one binary per
 // version, oldest first.
 func Detect() []PHP {
-	globs := platformGlobs()
-	seen := map[string]string{} // version → binary path
-
-	for _, pattern := range globs {
+	var bins []string
+	for _, pattern := range platformGlobs() {
 		matches, _ := filepath.Glob(pattern)
-		for _, bin := range matches {
-			v := queryVersion(bin)
-			if v == "" {
-				continue
-			}
-			if _, exists := seen[v]; !exists {
-				seen[v] = bin
-			}
-		}
+		bins = append(bins, matches...)
 	}
-
 	if plain, err := exec.LookPath(phpExe); err == nil {
-		if v := queryVersion(plain); v != "" {
-			if _, exists := seen[v]; !exists {
-				seen[v] = plain
-			}
-		}
+		bins = append(bins, plain)
 	}
+	return detect(bins, queryVersion)
+}
 
+// detect asks every binary of bins for its version with query, all at once:
+// each one is a php run, and they are independent. When several binaries
+// report the same version, the first of bins is kept.
+func detect(bins []string, query func(bin string) string) []PHP {
+	versions := make([]string, len(bins))
+	var wg sync.WaitGroup
+	for i, bin := range bins {
+		wg.Go(func() { versions[i] = query(bin) })
+	}
+	wg.Wait()
+
+	seen := map[string]bool{}
 	var results []PHP
-	for v, bin := range seen {
-		results = append(results, PHP{Version: v, Binary: bin})
+	for i, v := range versions {
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		results = append(results, PHP{Version: v, Binary: bins[i]})
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -61,7 +70,13 @@ func Detect() []PHP {
 }
 
 func queryVersion(bin string) string {
-	out, err := exec.Command(bin, "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
+	// Do not wait on output pipes a killed php may have left to a child.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

@@ -1,6 +1,7 @@
 package pvm
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -34,7 +35,7 @@ type fakeInstaller struct {
 	err                error
 }
 
-func (f *fakeInstaller) Install(h *home.Dir, ver string) error {
+func (f *fakeInstaller) Install(_ context.Context, h *home.Dir, ver string) error {
 	f.installed = append(f.installed, ver)
 	if f.err != nil {
 		return f.err

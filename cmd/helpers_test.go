@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,8 +18,11 @@ func (r ltsResolver) ResolveLTS() (string, error) { return string(r), nil }
 // fakeSystem installs, removes and activates by only updating the pvm home.
 type fakeSystem struct{ t *testing.T }
 
-func (f fakeSystem) Install(h *home.Dir, ver string) error { fakeInstall(f.t, h, ver); return nil }
-func (f fakeSystem) Remove(*home.Dir, string) error        { return nil }
+func (f fakeSystem) Install(_ context.Context, h *home.Dir, ver string) error {
+	fakeInstall(f.t, h, ver)
+	return nil
+}
+func (f fakeSystem) Remove(*home.Dir, string) error { return nil }
 func (f fakeSystem) Activate(h *home.Dir, ver, _ string) error {
 	return h.SetCurrent(ver)
 }
