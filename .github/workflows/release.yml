@@ -21,7 +21,7 @@ jobs:
 
   build:
     needs: version
-    uses: ./.github/workflows/build.yml
+    uses: rejmann/github-actions/.github/workflows/golang-build.yml@main
     with:
       version: ${{ needs.version.outputs.version }}
 
