@@ -56,15 +56,7 @@ var packageManagers = []pkgManagerDef{
 			if isInstallable(pkg, pmApt, "-s", "install", pkg) {
 				return nil
 			}
-			fmt.Fprintln(stdout, "Package not found, adding ondrej/php PPA...")
-			add := sudo.Command("add-apt-repository", "-y", "ppa:ondrej/php")
-			add.Stdout, add.Stderr = stdout, stderr
-			// add-apt-repository already runs apt-get update; a second update
-			// right after it can fail on the apt lists lock.
-			if err := add.Run(); err != nil {
-				return fmt.Errorf("add-apt-repository: %w", err)
-			}
-			return nil
+			return addAptPHPRepo(stdout, stderr)
 		},
 	},
 	{
